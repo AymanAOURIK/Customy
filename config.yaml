@@ -1,0 +1,13 @@
+server:
+  host: "127.0.0.1"
+  port: 8765
+
+llm:
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 6000
+
+paths:
+  applications_dir: "/mnt/c/Users/LENOVO/desktop/Customy output job applications"
+  db_path: "data/customy.db"
+  prompts_dir: "prompts"

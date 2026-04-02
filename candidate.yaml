@@ -1,0 +1,120 @@
+personal:
+  name: Ayman AOURIK
+  email: AourikAyman@gmail.com
+  phone: '+212652662724'
+  location: Casablanca, Morocco
+  linkedin: in/aourik-ayman/
+  github: ''
+headline: AI & Data Science Lead
+summary: AI & Data Lead with 4 years of experience shipping production data and AI systems with measurable operational impact.
+  I lead engineers, own delivery from scoping to production, and balance accuracy, scalability, and cost in real-world
+  deployments.
+skills:
+  languages:
+  - Python
+  - SQL
+  frameworks:
+  - FastAPI
+  - LangChain
+  - ChromaDB
+  - XGBoost
+  tools:
+  - Docker
+  - Airflow
+  - Pydantic
+  - PostgreSQL
+  - RAG
+  - LoRA Fine-tuning
+  - LLM-as-Judge
+  - OpenAI
+  - Power BI
+  soft:
+  - Team Lead
+  - AI Roadmap Ownership
+  - Stakeholder Communication
+  - AI-to-Business Translation
+  - Delivery-Focused AI Systems
+experiences:
+- company: Auto Dealers Digital
+  role: AI & Data Science Lead
+  start: 2025-07
+  end: present
+  location: Casablanca
+  bullets:
+  - Led a cross-functional team of 4 engineers across AI product and data engineering.
+  - Deployed an LLM auto-responder handling ~20K leads/month at 96% accuracy.
+  - Designed AI customer support with knowledge base and dealer-specific configurations, cutting agent workload 15% and ticket
+    escalations by 25%+.
+  - Replaced a CV pipeline for 2M+ vehicles and avoided $20K+ in GPU costs.
+  - Built an internal pipeline generating ~80K enriched leads and eliminated $15K+ in vendor spend.
+  - Shipped a Zoom call intelligence pipeline processing ~2,400 calls/week and saving ~60 hours/week across 30 agents.
+- company: DevelopMetrics
+  role: Data Scientist
+  start: 2023-12
+  end: 2025-07
+  location: Washington DC, USA
+  bullets:
+  - Fine-tuned a local LLM with LoRA adapters for multi-label classification.
+  - Built synthetic data workflows using ChromaDB + OpenAI, saving $10K+ in labeling costs.
+  - Developed a LangChain pipeline for large-document insight extraction, saving hundreds of hours of manual review.
+  - Led a team of 5 on platform data integrity and quality.
+- company: Menara Holding
+  role: Data Scientist
+  start: 2022-08
+  end: 2023-12
+  location: Marrakech, Morocco
+  bullets:
+  - Boosted throughput by 15% ($12K/month) via EDA and linear regression.
+  - Cut delivery time by 18% and saved $25K/year through routing analysis.
+  - Forecasted demand with XGBoost at 86% accuracy, reducing overstock by 35%.
+  - Halved reporting time with Power BI dashboards for real-time logistics KPIs.
+- company: MANAGEM
+  role: Graduation Project
+  start: 2022-02
+  end: 2022-08
+  location: Marrakech, Morocco
+  bullets:
+  - Employed statistical sampling and modeling techniques to improve data collection quality.
+  - Implemented Six Sigma methodologies to streamline operational processes.
+education:
+- institution: Mohammadia School of Engineering
+  degree: Data Analysis and Mining Engineer
+  start_year: 2019
+  end_year: 2022
+  year: 2022
+- institution: CPGE Marrakech Ibn Timiya
+  degree: Preparatory Classes
+  start_year: 2017
+  end_year: 2019
+  year: 2019
+spoken_languages:
+- English (Fluent)
+- French (Fluent)
+- Arabic (Native)
+scoring_keywords:
+- python
+- sql
+- llm
+- rag
+- lora fine-tuning
+- llm-as-judge
+- openai
+- langchain
+- chromadb
+- xgboost
+- power bi
+- data science
+- data engineering
+- data architecture
+- machine learning
+- document intelligence
+- automation
+- fastapi
+- docker
+- airflow
+- pydantic
+- postgresql
+- team leadership
+- stakeholder communication
+- ai delivery
+- cost optimization

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customy Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="topbar">
+        <div class="brand">
+          <span class="eyebrow">History and funnel</span>
+          <h1>Customy Dashboard</h1>
+        </div>
+        <a class="nav-link" href="/">← Generator</a>
+      </div>
+
+      <div class="dashboard-grid">
+        <section>
+          <div id="stats-row" class="stats-row"></div>
+        </section>
+
+        <section class="card chart-shell">
+          <div class="output-header">
+            <div>
+              <span class="eyebrow">Last 30 days</span>
+              <h2 class="serif">Activity Chart</h2>
+            </div>
+          </div>
+          <div id="chart-tooltip" class="chart-tooltip"></div>
+          <svg id="activity-chart" viewBox="0 0 820 260" aria-label="Activity chart"></svg>
+        </section>
+
+        <section>
+          <div id="quick-stats" class="quick-stats"></div>
+        </section>
+
+        <section>
+          <div class="output-header" style="margin-bottom:0.5em">
+            <div>
+              <span class="eyebrow">OpenAI usage</span>
+              <h2 class="serif">Cost Tracker</h2>
+            </div>
+          </div>
+          <div id="cost-stats" class="quick-stats"></div>
+        </section>
+
+        <section class="card">
+          <div class="output-header">
+            <div>
+              <span class="eyebrow">Applications</span>
+              <h2 class="serif">History</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Company</th>
+                  <th>Role</th>
+                  <th>Score</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                  <th>Outputs</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="applications-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const statsRow = document.getElementById("stats-row");
+      const quickStats = document.getElementById("quick-stats");
+      const costStats = document.getElementById("cost-stats");
+      const applicationsBody = document.getElementById("applications-body");
+      const chart = document.getElementById("activity-chart");
+      const tooltip = document.getElementById("chart-tooltip");
+      const svgNS = "http://www.w3.org/2000/svg";
+      const statusOptions = ["generated", "applied", "interviewing", "offer", "rejected", "ghosted"];
+
+      function percent(value, total) {
+        if (!total) return "0%";
+        return `${Math.round((value / total) * 100)}%`;
+      }
+
+      function scoreClass(score) {
+        const numeric = Number(score || 0);
+        if (numeric >= 70) return "score-green";
+        if (numeric >= 40) return "score-amber";
+        return "score-red";
+      }
+
+      function formatUsd(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "-";
+        if (n === 0) return "$0.00";
+        return "$" + n.toFixed(n < 0.01 ? 6 : 4);
+      }
+
+      async function fetchJson(url, options = {}) {
+        const res = await fetch(url, options);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+      }
+
+      function renderStats(funnel) {
+        const labels = [
+          ["generated", "Generated"],
+          ["applied", "Applied"],
+          ["interviewing", "Interviewing"],
+          ["offer", "Offer"],
+          ["rejected", "Rejected"],
+          ["ghosted", "Ghosted"],
+        ];
+        const total = Object.values(funnel).reduce((sum, value) => sum + Number(value || 0), 0);
+        statsRow.innerHTML = "";
+        labels.forEach(([key, label]) => {
+          const card = document.createElement("div");
+          card.className = "stat-card";
+          card.innerHTML = `
+            <span class="eyebrow">${label}</span>
+            <strong>${funnel[key] || 0}</strong>
+            <span class="subtext">${percent(funnel[key] || 0, total)} of total</span>
+          `;
+          statsRow.appendChild(card);
+        });
+      }
+
+      function renderQuickStats(stats) {
+        const items = [
+          ["Applications this week", stats.applications_this_week || 0],
+          ["Applications this month", stats.applications_this_month || 0],
+          ["Average score", stats.average_score || 0],
+          ["Most targeted role", stats.most_targeted_role || "-"],
+        ];
+        quickStats.innerHTML = "";
+        items.forEach(([label, value]) => {
+          const card = document.createElement("div");
+          card.className = "quick-card";
+          card.innerHTML = `
+            <span class="eyebrow">${label}</span>
+            <strong>${value}</strong>
+          `;
+          quickStats.appendChild(card);
+        });
+
+        const costItems = [
+          ["Total API cost", formatUsd(stats.openai_total_cost_usd)],
+          ["Avg cost / generation", formatUsd(stats.openai_average_cost_usd)],
+          ["Total tokens used", (stats.openai_total_tokens || 0).toLocaleString()],
+          ["Prompt tokens", (stats.openai_prompt_tokens || 0).toLocaleString()],
+          ["Cached tokens", (stats.openai_cached_prompt_tokens || 0).toLocaleString()],
+          ["Completion tokens", (stats.openai_completion_tokens || 0).toLocaleString()],
+          ["API requests", stats.openai_request_count || 0],
+          ["Failed requests", stats.openai_failed_request_count || 0],
+        ];
+        costStats.innerHTML = "";
+        costItems.forEach(([label, value]) => {
+          const card = document.createElement("div");
+          card.className = "quick-card";
+          card.innerHTML = `
+            <span class="eyebrow">${label}</span>
+            <strong>${value}</strong>
+          `;
+          costStats.appendChild(card);
+        });
+      }
+
+      async function updateStatus(id, newStatus) {
+        await fetchJson(`/api/applications/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_status: newStatus })
+        });
+      }
+
+      function outputLinks(outputs) {
+        const labels = {
+          resume_pdf: "📄",
+          cover_letter: "📝",
+          linkedin_message: "🔗",
+          email_draft: "✉️",
+          resume_tex: "TEX"
+        };
+        const wrap = document.createElement("div");
+        wrap.className = "outputs-cell";
+        Object.entries(outputs || {}).forEach(([key, url]) => {
+          if (key === "generated_json") return;
+          const link = document.createElement("a");
+          link.className = "icon-link";
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = labels[key] || key[0].toUpperCase();
+          link.title = key;
+          wrap.appendChild(link);
+        });
+        return wrap;
+      }
+
+      function renderApplications(items) {
+        applicationsBody.innerHTML = "";
+        items.forEach((item) => {
+          const row = document.createElement("tr");
+          const select = document.createElement("select");
+          select.className = "status-select";
+          statusOptions.forEach((status) => {
+            const option = document.createElement("option");
+            option.value = status;
+            option.textContent = status;
+            option.selected = item.status === status;
+            select.appendChild(option);
+          });
+          select.addEventListener("change", async () => {
+            try {
+              await updateStatus(item.id, select.value);
+            } catch (error) {
+              alert(error.message);
+              select.value = item.status;
+            }
+          });
+
+          const actionLink = document.createElement("a");
+          actionLink.className = "small-button";
+          actionLink.href = item.folder_url;
+          actionLink.target = "_blank";
+          actionLink.rel = "noreferrer";
+          actionLink.textContent = "📁";
+          actionLink.title = item.folder_path || "";
+
+          row.innerHTML = `
+            <td>${(item.created_at || "").slice(0, 10)}</td>
+            <td>${item.company || ""}</td>
+            <td>${item.role || ""}</td>
+            <td><span class="score-badge ${scoreClass(item.score)}">${Number(item.score || 0).toFixed(1)}</span></td>
+            <td>${item.total_cost_usd != null ? formatUsd(item.total_cost_usd) : "-"}</td>
+          `;
+
+          const statusCell = document.createElement("td");
+          statusCell.appendChild(select);
+          const outputsCell = document.createElement("td");
+          outputsCell.appendChild(outputLinks(item.outputs));
+          const actionsCell = document.createElement("td");
+          actionsCell.appendChild(actionLink);
+
+          row.appendChild(statusCell);
+          row.appendChild(outputsCell);
+          row.appendChild(actionsCell);
+          applicationsBody.appendChild(row);
+        });
+      }
+
+      function svgNode(name, attrs = {}) {
+        const node = document.createElementNS(svgNS, name);
+        Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+        return node;
+      }
+
+      function drawChart(points) {
+        chart.innerHTML = "";
+        const width = 820;
+        const height = 260;
+        const margin = { top: 20, right: 20, bottom: 42, left: 40 };
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+        const maxValue = Math.max(1, ...points.map((point) => Number(point.generated || 0)));
+
+        chart.appendChild(svgNode("line", { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, stroke: "#8c8475" }));
+        chart.appendChild(svgNode("line", { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, stroke: "#8c8475" }));
+
+        [0, maxValue].forEach((tick) => {
+          const y = margin.top + innerHeight - (tick / maxValue) * innerHeight;
+          chart.appendChild(svgNode("text", { x: 8, y: y + 4, fill: "#62706a", "font-size": "12" }));
+          chart.lastChild.textContent = String(tick);
+          chart.appendChild(svgNode("line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, stroke: "rgba(23,32,28,0.08)" }));
+        });
+
+        const barWidth = innerWidth / Math.max(points.length, 1) - 4;
+        points.forEach((point, index) => {
+          const value = Number(point.generated || 0);
+          const barHeight = (value / maxValue) * innerHeight;
+          const x = margin.left + index * (barWidth + 4);
+          const y = margin.top + innerHeight - barHeight;
+          const rect = svgNode("rect", {
+            x,
+            y,
+            width: Math.max(barWidth, 4),
+            height: barHeight,
+            rx: 6,
+            fill: "#8d5d2f"
+          });
+          rect.addEventListener("mousemove", (event) => {
+            tooltip.classList.add("visible");
+            tooltip.innerHTML = `${point.date}<br />Generated: ${value}`;
+            const bounds = chart.getBoundingClientRect();
+            tooltip.style.left = `${event.clientX - bounds.left}px`;
+            tooltip.style.top = `${event.clientY - bounds.top}px`;
+          });
+          rect.addEventListener("mouseleave", () => tooltip.classList.remove("visible"));
+          chart.appendChild(rect);
+
+          if (index % 7 === 0 || index === points.length - 1) {
+            const label = svgNode("text", {
+              x: x + Math.max(barWidth, 4) / 2,
+              y: height - 12,
+              fill: "#62706a",
+              "font-size": "11",
+              "text-anchor": "middle"
+            });
+            label.textContent = point.date.slice(5);
+            chart.appendChild(label);
+          }
+        });
+      }
+
+      async function loadDashboard() {
+        try {
+          const [stats, applications] = await Promise.all([
+            fetchJson("/api/stats"),
+            fetchJson("/api/applications?limit=100&offset=0")
+          ]);
+          renderStats(stats.funnel || {});
+          renderQuickStats(stats.quick_stats || {});
+          drawChart(stats.daily_stats || []);
+          renderApplications(applications.items || []);
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+
+      loadDashboard();
+    </script>
+  </body>
+</html>

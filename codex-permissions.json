@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "tool": "codex",
+  "profile": "flexible",
+  "note": "Shared permission profile for Codex and Claude Code for the standalone Customy app.",
+  "allowed": {
+    "read_paths": ["./**", "~/.config/**", "/tmp/**"],
+    "write_paths": ["./**", "/tmp/**"],
+    "blocked_paths": [
+      ".env",
+      ".env.*",
+      "secrets/**",
+      "**/*.pem",
+      "**/*.key",
+      "**/*.p12",
+      "**/*.pfx",
+      ".git/config"
+    ],
+    "commands": [
+      "pwd", "ls", "find", "cat", "head", "tail", "grep", "rg", "wc",
+      "echo", "printf", "which", "whereis", "type", "env", "printenv",
+
+      "cp", "mv", "mkdir", "touch", "chmod", "ln",
+      "tar", "zip", "unzip", "gzip", "gunzip",
+
+      "git status", "git diff", "git log", "git branch", "git show",
+      "git add *", "git commit *", "git restore *", "git reset *",
+      "git stash *", "git merge *", "git rebase *",
+      "git checkout *", "git switch *", "git tag *",
+      "git remote -v", "git fetch *", "git pull *", "git push *",
+
+      "python *", "python3 *",
+      "pytest *", "uv run *", "uv pip *",
+      "pip install *", "pip uninstall *", "pip list", "pip show *",
+
+      "ruff *", "black *", "isort *", "mypy *", "flake8 *",
+
+      "npm install *", "npm test", "npm run *",
+      "pnpm install *", "pnpm test", "pnpm run *",
+      "yarn add *", "yarn test", "yarn run *",
+      "node *",
+
+      "curl *", "wget *", "jq *",
+
+      "diff *", "patch *", "sed *", "awk *", "sort *",
+      "uniq *", "tr *", "cut *", "xargs *",
+
+      "date", "uptime", "uname *", "df *", "du *",
+      "ps *", "kill *",
+
+      "sh *", "bash *",
+
+      "pdflatex *", "xelatex *", "lualatex *"
+    ]
+  },
+  "require_approval": {
+    "network": false,
+    "install_commands": false,
+    "delete_commands": true,
+    "force_git_commands": true,
+    "write_outside_workspace": true,
+    "system_commands": true
+  }
+}
