@@ -3,439 +3,393 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Customy Dashboard</title>
+    <title>Customy</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
-  <body>
-    <div class="app-shell">
-      <div class="topbar">
-        <div class="brand">
-          <span class="eyebrow">History and funnel</span>
-          <h1>Customy Dashboard</h1>
+  <body class="platform-body">
+    <div class="platform">
+
+      <!-- ── Sidebar ──────────────────────────────────── -->
+      <aside class="platform-sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <h2>Customy</h2>
+          <span class="sidebar-brand-sub">Job Search Platform</span>
         </div>
-        <a class="nav-link" href="/">← Generator</a>
-      </div>
 
-      <div class="dashboard-grid">
-        <section>
-          <div id="stats-row" class="stats-row"></div>
-        </section>
+        <nav class="sidebar-nav">
+          <div class="sidebar-section-label">Main</div>
+          <a class="sidebar-link active" href="#overview" data-section="section-overview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Overview
+          </a>
+          <a class="sidebar-link" href="#apply-queue" data-section="section-apply-queue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+            Apply Queue
+          </a>
+          <a class="sidebar-link" href="#tailoring-studio" data-section="section-tailoring-studio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            Tailoring Studio
+          </a>
 
-        <section class="card chart-shell">
-          <div class="output-header">
-            <div>
-              <span class="eyebrow">Last 30 days</span>
-              <h2 class="serif">Activity Chart</h2>
+          <div class="sidebar-section-label">Track</div>
+          <a class="sidebar-link" href="#job-tracker" data-section="section-job-tracker">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Job Tracker
+          </a>
+          <a class="sidebar-link" href="#interview-prep" data-section="section-interview-prep">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Interview Prep
+          </a>
+
+          <div class="sidebar-section-label">Intelligence</div>
+          <a class="sidebar-link" href="#market-intel" data-section="section-market-intel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Market Intel
+          </a>
+          <a class="sidebar-link" href="#profile-intelligence" data-section="section-profile-intelligence">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Profile Intelligence
+          </a>
+
+          <div class="sidebar-section-label">Manage</div>
+          <a class="sidebar-link" href="#library" data-section="section-library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+            Library
+          </a>
+          <a class="sidebar-link" href="#settings" data-section="section-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            Settings
+          </a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="sidebar-help-card">
+            <p class="sidebar-help-title">Local Mode</p>
+            <p class="sidebar-help-text">All data stays on your machine. No cloud, no tracking.</p>
+          </div>
+        </div>
+      </aside>
+
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <!-- ── Main ─────────────────────────────────────── -->
+      <div class="platform-main">
+        <header class="platform-topbar">
+          <button class="topbar-action sidebar-toggle" id="sidebar-toggle" title="Menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="topbar-spacer"></div>
+          <button class="topbar-action" title="Notifications">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </button>
+          <div class="topbar-profile">
+            <div class="topbar-avatar">A</div>
+            <span class="topbar-name">Ayman</span>
+          </div>
+        </header>
+
+        <div class="platform-content">
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- OVERVIEW                                    -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-overview" class="platform-section active">
+            <div class="page-header">
+              <div>
+                <h1>Overview</h1>
+                <p>Your job search command center</p>
+              </div>
+              <div class="page-header-actions">
+                <a href="/" class="btn-primary">+ New Application</a>
+              </div>
             </div>
-          </div>
-          <div id="chart-tooltip" class="chart-tooltip"></div>
-          <svg id="activity-chart" viewBox="0 0 820 260" aria-label="Activity chart"></svg>
-        </section>
 
-        <section>
-          <div id="quick-stats" class="quick-stats"></div>
-        </section>
+            <!-- KPI / Funnel -->
+            <div class="kpi-grid" id="kpi-grid"></div>
 
-        <section>
-          <div class="output-header" style="margin-bottom:0.5em">
-            <div>
-              <span class="eyebrow">OpenAI usage</span>
-              <h2 class="serif">Cost Tracker</h2>
+            <!-- Hero: Profile + Target Roles + Resume -->
+            <div class="content-3col">
+              <div class="shell-card" id="overview-profile-slot">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title">Profile Snapshot</h3>
+                    <p class="shell-card-subtitle">Candidate profile summary</p>
+                  </div>
+                </div>
+                <div class="placeholder-section" style="min-height:120px">
+                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <p class="placeholder-text">Profile snapshot will appear here</p>
+                </div>
+              </div>
+
+              <div class="shell-card" id="overview-target-roles-slot">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title">Target Roles</h3>
+                    <p class="shell-card-subtitle">Roles you're pursuing</p>
+                  </div>
+                </div>
+                <div class="placeholder-section" style="min-height:120px">
+                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  <p class="placeholder-text">Target roles will appear here</p>
+                </div>
+              </div>
+
+              <div class="shell-card" id="overview-resume-slot">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title">Original Resume</h3>
+                    <p class="shell-card-subtitle">Base resume on file</p>
+                  </div>
+                </div>
+                <div class="placeholder-section" style="min-height:120px">
+                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <p class="placeholder-text">Resume details will appear here</p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div id="cost-stats" class="quick-stats"></div>
-        </section>
 
-        <section class="card">
-          <div class="output-header">
-            <div>
-              <span class="eyebrow">Applications</span>
-              <h2 class="serif">History</h2>
-              <p class="section-note">Duplicate rows stay in history but are excluded from generated, applied, and interview stats.</p>
+            <!-- Activity Chart + Next Actions -->
+            <div class="content-main-side">
+              <div class="shell-card chart-card">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title">Activity</h3>
+                    <p class="shell-card-subtitle">Last 30 days</p>
+                  </div>
+                </div>
+                <div id="chart-tooltip" class="shell-chart-tooltip"></div>
+                <svg id="activity-chart" viewBox="0 0 820 260" aria-label="Activity chart"></svg>
+              </div>
+
+              <div class="shell-card">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title">Next Actions</h3>
+                    <p class="shell-card-subtitle">Recommended steps</p>
+                  </div>
+                </div>
+                <div class="placeholder-section" style="min-height:140px">
+                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  <p class="placeholder-text">Action recommendations will appear here</p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Company</th>
-                  <th>Role</th>
-                  <th>Initial Score</th>
-                  <th>Updated Score</th>
-                  <th>Cost</th>
-                  <th>Status</th>
-                  <th>Job URL</th>
-                  <th>Outputs</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="applications-body"></tbody>
-            </table>
-          </div>
-        </section>
+
+            <!-- Quick Stats -->
+            <div class="shell-card" style="margin-bottom:20px">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Quick Stats</h3>
+                  <p class="shell-card-subtitle">Performance overview</p>
+                </div>
+              </div>
+              <div class="quick-stats-grid" id="quick-stats"></div>
+            </div>
+
+            <!-- Cost Tracker -->
+            <div class="shell-card" style="margin-bottom:20px">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Cost Tracker</h3>
+                  <p class="shell-card-subtitle">OpenAI usage</p>
+                </div>
+              </div>
+              <div class="quick-stats-grid" id="cost-stats"></div>
+            </div>
+
+            <!-- Applications History -->
+            <div class="shell-card">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Applications</h3>
+                  <p class="shell-card-subtitle">History &middot; Duplicate rows are excluded from stats</p>
+                </div>
+              </div>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Company</th>
+                      <th>Role</th>
+                      <th>Initial</th>
+                      <th>Updated</th>
+                      <th>Cost</th>
+                      <th>Status</th>
+                      <th>Job URL</th>
+                      <th>Outputs</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="applications-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- APPLY QUEUE                                 -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-apply-queue" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Apply Queue</h1>
+                <p>Manage your application pipeline</p>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+                <h3 class="placeholder-title">Apply Queue</h3>
+                <p class="placeholder-text">Queue and track job applications you plan to submit. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- TAILORING STUDIO                            -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-tailoring-studio" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Tailoring Studio</h1>
+                <p>Craft tailored resumes and cover letters</p>
+              </div>
+              <div class="page-header-actions">
+                <a href="/" class="btn-primary">Open Generator</a>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <h3 class="placeholder-title">Tailoring Studio</h3>
+                <p class="placeholder-text">The full tailoring workspace will live here. Use the generator for now.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- JOB TRACKER                                 -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-job-tracker" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Job Tracker</h1>
+                <p>Track applications across your pipeline</p>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                <h3 class="placeholder-title">Job Tracker</h3>
+                <p class="placeholder-text">A kanban and table view for all your tracked applications. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- INTERVIEW PREP                              -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-interview-prep" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Interview Prep</h1>
+                <p>Prepare for upcoming interviews</p>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <h3 class="placeholder-title">Interview Prep</h3>
+                <p class="placeholder-text">Company briefs, practice questions, and STAR stories. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- MARKET INTEL                                -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-market-intel" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Market Intel</h1>
+                <p>Labor market insights and trends</p>
+              </div>
+            </div>
+            <div class="shell-card" id="market-intel-section">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <h3 class="placeholder-title">Market Intel</h3>
+                <p class="placeholder-text">Market trends, salary data, and competitive intelligence. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- PROFILE INTELLIGENCE                        -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-profile-intelligence" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Profile Intelligence</h1>
+                <p>Optimize your professional profile</p>
+              </div>
+            </div>
+            <div class="shell-card" id="profile-intelligence-section">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <h3 class="placeholder-title">Profile Intelligence</h3>
+                <p class="placeholder-text">Profile optimization and gap analysis. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- LIBRARY                                     -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-library" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Library</h1>
+                <p>Your generated resumes, letters, and saved content</p>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                <h3 class="placeholder-title">Library</h3>
+                <p class="placeholder-text">All your generated resumes, cover letters, and reusable stories. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- SETTINGS                                    -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-settings" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Settings</h1>
+                <p>Configure your workspace</p>
+              </div>
+            </div>
+            <div class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                <h3 class="placeholder-title">Settings</h3>
+                <p class="placeholder-text">Profile, model configuration, and preferences. Coming soon.</p>
+              </div>
+            </div>
+          </section>
+
+        </div>
       </div>
     </div>
 
-    <script>
-      const statsRow = document.getElementById("stats-row");
-      const quickStats = document.getElementById("quick-stats");
-      const costStats = document.getElementById("cost-stats");
-      const applicationsBody = document.getElementById("applications-body");
-      const chart = document.getElementById("activity-chart");
-      const tooltip = document.getElementById("chart-tooltip");
-      const svgNS = "http://www.w3.org/2000/svg";
-      const statusOptions = ["generated", "applied", "interviewing", "offer", "rejected", "ghosted"];
-
-      function percent(value, total) {
-        if (!total) return "0%";
-        return `${Math.round((value / total) * 100)}%`;
-      }
-
-      function scoreClass(score) {
-        const numeric = Number(score || 0);
-        if (numeric >= 70) return "score-green";
-        if (numeric >= 40) return "score-amber";
-        return "score-red";
-      }
-
-      function formatUsd(value) {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return "-";
-        if (n === 0) return "$0.00";
-        return "$" + n.toFixed(n < 0.01 ? 6 : 4);
-      }
-
-      function formatScore(value) {
-        if (value === null || value === undefined || value === "") return "-";
-        const numeric = Number(value);
-        return Number.isFinite(numeric) ? numeric.toFixed(1) : "-";
-      }
-
-      function scoreBadge(score) {
-        if (score === null || score === undefined || score === "") return '<span class="subtext">-</span>';
-        const numeric = Number(score);
-        if (!Number.isFinite(numeric)) return '<span class="subtext">-</span>';
-        return `<span class="score-badge ${scoreClass(numeric)}">${numeric.toFixed(1)}</span>`;
-      }
-
-      async function fetchJson(url, options = {}) {
-        const res = await fetch(url, options);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data;
-      }
-
-      function renderStats(funnel) {
-        const labels = [
-          ["generated", "Generated"],
-          ["applied", "Applied"],
-          ["interviewing", "Interviewing"],
-          ["offer", "Offer"],
-          ["rejected", "Rejected"],
-          ["ghosted", "Ghosted"],
-        ];
-        const total = Object.values(funnel).reduce((sum, value) => sum + Number(value || 0), 0);
-        statsRow.innerHTML = "";
-        labels.forEach(([key, label]) => {
-          const card = document.createElement("div");
-          card.className = "stat-card";
-          card.innerHTML = `
-            <span class="eyebrow">${label}</span>
-            <strong>${funnel[key] || 0}</strong>
-            <span class="subtext">${percent(funnel[key] || 0, total)} of total</span>
-          `;
-          statsRow.appendChild(card);
-        });
-      }
-
-      function renderQuickStats(stats) {
-        const items = [
-          ["Applications this week", stats.applications_this_week || 0],
-          ["Applications this month", stats.applications_this_month || 0],
-          ["Average initial score", formatScore(stats.average_initial_score)],
-          ["Average updated score", formatScore(stats.average_updated_score)],
-          ["Most targeted role", stats.most_targeted_role || "-"],
-        ];
-        quickStats.innerHTML = "";
-        items.forEach(([label, value]) => {
-          const card = document.createElement("div");
-          card.className = "quick-card";
-          card.innerHTML = `
-            <span class="eyebrow">${label}</span>
-            <strong>${value}</strong>
-          `;
-          quickStats.appendChild(card);
-        });
-
-        const costItems = [
-          ["Total API cost", formatUsd(stats.openai_total_cost_usd)],
-          ["Avg cost / generation", formatUsd(stats.openai_average_cost_usd)],
-          ["Total tokens used", (stats.openai_total_tokens || 0).toLocaleString()],
-          ["Prompt tokens", (stats.openai_prompt_tokens || 0).toLocaleString()],
-          ["Cached tokens", (stats.openai_cached_prompt_tokens || 0).toLocaleString()],
-          ["Completion tokens", (stats.openai_completion_tokens || 0).toLocaleString()],
-          ["API requests", stats.openai_request_count || 0],
-          ["Failed requests", stats.openai_failed_request_count || 0],
-        ];
-        costStats.innerHTML = "";
-        costItems.forEach(([label, value]) => {
-          const card = document.createElement("div");
-          card.className = "quick-card";
-          card.innerHTML = `
-            <span class="eyebrow">${label}</span>
-            <strong>${value}</strong>
-          `;
-          costStats.appendChild(card);
-        });
-      }
-
-      async function updateStatus(id, newStatus) {
-        await fetchJson(`/api/applications/${id}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ new_status: newStatus })
-        });
-      }
-
-      async function updateDuplicateFlag(id, isDuplicate) {
-        await fetchJson(`/api/applications/${id}/duplicate`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ is_duplicate: isDuplicate })
-        });
-      }
-
-      async function openFolder(folderUrl) {
-        await fetchJson(folderUrl, { method: "POST" });
-      }
-
-      function outputLinks(outputs) {
-        const labels = {
-          resume_pdf: "📄",
-          cover_letter: "📝",
-          linkedin_message: "🔗",
-          email_draft: "✉️",
-          resume_tex: "TEX"
-        };
-        const wrap = document.createElement("div");
-        wrap.className = "outputs-cell";
-        Object.entries(outputs || {}).forEach(([key, url]) => {
-          if (key === "generated_json") return;
-          const filename = (() => {
-            try {
-              return new URL(url, window.location.origin).pathname.split("/").pop();
-            } catch (error) {
-              return "";
-            }
-          })();
-          const link = document.createElement("a");
-          link.className = "icon-link";
-          link.href = url;
-          if (key === "cover_letter") {
-            link.download = filename || "Ayman_Aourik_Cover_letter.txt";
-          } else {
-            link.target = "_blank";
-            link.rel = "noreferrer";
-          }
-          link.textContent = labels[key] || key[0].toUpperCase();
-          link.title = filename || key;
-          wrap.appendChild(link);
-        });
-        return wrap;
-      }
-
-      function jobApplicationLink(url) {
-        if (!url) {
-          const placeholder = document.createElement("span");
-          placeholder.className = "subtext";
-          placeholder.textContent = "-";
-          return placeholder;
-        }
-        const link = document.createElement("a");
-        link.className = "small-button job-link";
-        link.href = url;
-        link.target = "_blank";
-        link.rel = "noreferrer";
-        try {
-          const parsed = new URL(url);
-          link.textContent = parsed.hostname.replace(/^www\./, "");
-        } catch (error) {
-          link.textContent = "Open";
-        }
-        link.title = url;
-        return link;
-      }
-
-      function renderApplications(items) {
-        applicationsBody.innerHTML = "";
-        items.forEach((item) => {
-          const row = document.createElement("tr");
-          if (item.is_duplicate) row.classList.add("duplicate-row");
-          const select = document.createElement("select");
-          select.className = "status-select";
-          statusOptions.forEach((status) => {
-            const option = document.createElement("option");
-            option.value = status;
-            option.textContent = status;
-            option.selected = item.status === status;
-            select.appendChild(option);
-          });
-          select.addEventListener("change", async () => {
-            try {
-              await updateStatus(item.id, select.value);
-              await loadDashboard();
-            } catch (error) {
-              alert(error.message);
-              select.value = item.status;
-            }
-          });
-
-          const actionWrap = document.createElement("div");
-          actionWrap.className = "table-button-row";
-
-          const folderButton = document.createElement("button");
-          folderButton.type = "button";
-          folderButton.className = "small-button";
-          folderButton.textContent = "📁";
-          folderButton.title = item.folder_path || "";
-          folderButton.disabled = !item.folder_url;
-          folderButton.addEventListener("click", async () => {
-            if (!item.folder_url) return;
-            folderButton.disabled = true;
-            try {
-              await openFolder(item.folder_url);
-            } catch (error) {
-              alert(error.message);
-            } finally {
-              folderButton.disabled = false;
-            }
-          });
-          actionWrap.appendChild(folderButton);
-
-          const duplicateButton = document.createElement("button");
-          duplicateButton.type = "button";
-          duplicateButton.className = `small-button ${item.is_duplicate ? "flag-active" : ""}`.trim();
-          duplicateButton.textContent = item.is_duplicate ? "Undup" : "Dup";
-          duplicateButton.title = item.is_duplicate ? "Include this row in funnel and activity stats again" : "Mark this row as a duplicate and exclude it from funnel and activity stats";
-          duplicateButton.addEventListener("click", async () => {
-            duplicateButton.disabled = true;
-            try {
-              await updateDuplicateFlag(item.id, !item.is_duplicate);
-              await loadDashboard();
-            } catch (error) {
-              alert(error.message);
-            } finally {
-              duplicateButton.disabled = false;
-            }
-          });
-          actionWrap.appendChild(duplicateButton);
-
-          row.innerHTML = `
-            <td>${(item.created_at || "").slice(0, 10)}</td>
-            <td>${item.company || ""}${item.is_duplicate ? ' <span class="flag-badge">Duplicate</span>' : ""}</td>
-            <td>${item.role || ""}</td>
-            <td>${scoreBadge(item.initial_score)}</td>
-            <td>${scoreBadge(item.updated_score)}</td>
-            <td>${item.total_cost_usd != null ? formatUsd(item.total_cost_usd) : "-"}</td>
-          `;
-
-          const statusCell = document.createElement("td");
-          statusCell.appendChild(select);
-          const jobUrlCell = document.createElement("td");
-          jobUrlCell.appendChild(jobApplicationLink(item.job_application_url));
-          const outputsCell = document.createElement("td");
-          outputsCell.appendChild(outputLinks(item.outputs));
-          const actionsCell = document.createElement("td");
-          actionsCell.appendChild(actionWrap);
-
-          row.appendChild(statusCell);
-          row.appendChild(jobUrlCell);
-          row.appendChild(outputsCell);
-          row.appendChild(actionsCell);
-          applicationsBody.appendChild(row);
-        });
-      }
-
-      function svgNode(name, attrs = {}) {
-        const node = document.createElementNS(svgNS, name);
-        Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
-        return node;
-      }
-
-      function drawChart(points) {
-        chart.innerHTML = "";
-        const width = 820;
-        const height = 260;
-        const margin = { top: 20, right: 20, bottom: 42, left: 40 };
-        const innerWidth = width - margin.left - margin.right;
-        const innerHeight = height - margin.top - margin.bottom;
-        const maxValue = Math.max(1, ...points.map((point) => Number(point.generated || 0)));
-
-        chart.appendChild(svgNode("line", { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, stroke: "#8c8475" }));
-        chart.appendChild(svgNode("line", { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, stroke: "#8c8475" }));
-
-        [0, maxValue].forEach((tick) => {
-          const y = margin.top + innerHeight - (tick / maxValue) * innerHeight;
-          chart.appendChild(svgNode("text", { x: 8, y: y + 4, fill: "#62706a", "font-size": "12" }));
-          chart.lastChild.textContent = String(tick);
-          chart.appendChild(svgNode("line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, stroke: "rgba(23,32,28,0.08)" }));
-        });
-
-        const barWidth = innerWidth / Math.max(points.length, 1) - 4;
-        points.forEach((point, index) => {
-          const value = Number(point.generated || 0);
-          const barHeight = (value / maxValue) * innerHeight;
-          const x = margin.left + index * (barWidth + 4);
-          const y = margin.top + innerHeight - barHeight;
-          const rect = svgNode("rect", {
-            x,
-            y,
-            width: Math.max(barWidth, 4),
-            height: barHeight,
-            rx: 6,
-            fill: "#8d5d2f"
-          });
-          rect.addEventListener("mousemove", (event) => {
-            tooltip.classList.add("visible");
-            tooltip.innerHTML = `${point.date}<br />Generated: ${value}`;
-            const bounds = chart.getBoundingClientRect();
-            tooltip.style.left = `${event.clientX - bounds.left}px`;
-            tooltip.style.top = `${event.clientY - bounds.top}px`;
-          });
-          rect.addEventListener("mouseleave", () => tooltip.classList.remove("visible"));
-          chart.appendChild(rect);
-
-          if (index % 7 === 0 || index === points.length - 1) {
-            const label = svgNode("text", {
-              x: x + Math.max(barWidth, 4) / 2,
-              y: height - 12,
-              fill: "#62706a",
-              "font-size": "11",
-              "text-anchor": "middle"
-            });
-            label.textContent = point.date.slice(5);
-            chart.appendChild(label);
-          }
-        });
-      }
-
-      async function loadDashboard() {
-        try {
-          const [stats, applications] = await Promise.all([
-            fetchJson("/api/stats"),
-            fetchJson("/api/applications?limit=100&offset=0")
-          ]);
-          renderStats(stats.funnel || {});
-          renderQuickStats(stats.quick_stats || {});
-          drawChart(stats.daily_stats || []);
-          renderApplications(applications.items || []);
-        } catch (error) {
-          alert(error.message);
-        }
-      }
-
-      loadDashboard();
-    </script>
+    <script src="/static/dashboard-shell.js"></script>
+    <!-- Future agent scripts — will load when built -->
+    <script src="/static/market-intel.js" defer></script>
+    <script src="/static/profile-intelligence.js" defer></script>
   </body>
 </html>
