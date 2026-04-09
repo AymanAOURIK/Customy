@@ -6,9 +6,10 @@ personal:
   linkedin: in/aourik-ayman/
   github: ''
 headline: AI & Data Science Lead
-summary: AI & Data Lead with 4 years of experience shipping production data and AI systems with measurable operational impact.
-  I lead engineers, own delivery from scoping to production, and balance accuracy, scalability, and cost in real-world
-  deployments.
+summary: AI & Data Lead with 4 years of experience. I build systems that run in production and replace real human
+  workload, not demos or prototypes. I lead engineers, own the roadmap, and make cost and accuracy tradeoffs that move
+  the needle. My goal in every role is to turn the company into an AI-driven operation where support is automated,
+  leads are handled autonomously, insights are centralized, and manual work is minimized.
 skills:
   languages:
   - Python
@@ -28,6 +29,9 @@ skills:
   - LLM-as-Judge
   - OpenAI
   - Power BI
+  - Deepgram
+  - Freshdesk
+  - Notion
   soft:
   - Team Lead
   - AI Roadmap Ownership
@@ -42,22 +46,61 @@ experiences:
   location: Casablanca
   bullets:
   - Led a cross-functional team of 4 engineers across AI product and data engineering.
-  - Deployed an LLM auto-responder handling ~20K leads/month at 96% accuracy.
-  - Designed AI customer support with knowledge base and dealer-specific configurations, cutting agent workload 15% and ticket
-    escalations by 25%+.
-  - Replaced a CV pipeline for 2M+ vehicles and avoided $20K+ in GPU costs.
-  - Built an internal pipeline generating ~80K enriched leads and eliminated $15K+ in vendor spend.
-  - Shipped a Zoom call intelligence pipeline processing ~2,400 calls/week and saving ~60 hours/week across 30 agents.
+  - Built an intent-based LLM auto-responder (LangChain + FastAPI) querying live dealer databases directly — no RAG needed —
+    handling ~20K leads/month at 96% accuracy.
+  - Designed AI customer support integrated with Freshdesk, combining a dealer-specific knowledge base with per-dealer
+    configurations, cutting agent workload by 15% and ticket escalations by 25%+.
+  - Replaced a costly CV classification pipeline for 2M+ vehicles with an LLM-based approach, avoiding $20K+ in GPU costs.
+  - Built a production vehicle image pipeline using pre-trained segmentation and background removal models, reducing per-image
+    processing time from minutes to seconds at scale.
+  - Built an internal web scraping and deduplication pipeline generating ~80K enriched leads, eliminating $15K+ in third-party
+    vendor spend.
+  - Built an AI PM coordination agent integrating Jira, Google Calendar, Notion, and Deepgram — pulling project status and
+    Jira tickets, enriching context with Notion docs, generating sprint planning presentations, booking calendar slots, and
+    tracking ETAs with minimal human intervention.
+  - Shipped a Zoom call intelligence pipeline (Deepgram transcription + LLM analysis) processing ~2,400 calls/week, producing
+    per-call overviews, sentiment analysis, and next steps — saving ~60 hours/week across 30 agents.
+  bullets_fr:
+  - Dirigé une équipe cross-fonctionnelle de 4 ingénieurs sur les produits IA et l'ingénierie data.
+  - Construit un auto-répondeur LLM basé sur les intentions (LangChain + FastAPI) interrogeant directement les bases de données
+    des concessionnaires — sans RAG — traitant ~20K leads/mois avec une précision de 96%.
+  - Conçu un support client IA intégré à Freshdesk, combinant une base de connaissances et des configurations spécifiques par
+    concessionnaire, réduisant la charge de travail des agents de 15% et les escalades de tickets de plus de 25%.
+  - Remplacé un pipeline Computer Vision coûteux sur 2M+ véhicules par une approche LLM, évitant $20K+ de coûts GPU.
+  - Construit un pipeline de production de traitement d'images véhicules (segmentation + suppression d'arrière-plan) avec des
+    modèles pré-entraînés, réduisant le temps de traitement de quelques minutes à quelques secondes à grande échelle.
+  - Construit un pipeline de scraping web et déduplication générant ~80K leads enrichis, supprimant $15K+ de dépenses fournisseurs.
+  - Développé un agent IA de coordination PM intégrant Jira, Google Calendar, Notion et Deepgram — récupérant le statut des
+    projets, enrichissant le contexte avec Notion, générant des présentations de sprint planning, réservant des créneaux
+    calendrier et suivant les ETAs avec une intervention humaine minimale.
+  - Livré un pipeline Zoom d'intelligence d'appels (transcription Deepgram + analyse LLM) traitant ~2,400 appels/semaine,
+    produisant des synthèses, analyses de sentiment et prochaines étapes par appel — économisant ~60 heures/semaine pour 30 agents.
 - company: DevelopMetrics
   role: Data Scientist
   start: 2023-12
   end: 2025-07
   location: Washington DC, USA
   bullets:
-  - Fine-tuned a local LLM with LoRA adapters for multi-label classification.
-  - Built synthetic data workflows using ChromaDB + OpenAI, saving $10K+ in labeling costs.
-  - Developed a LangChain pipeline for large-document insight extraction, saving hundreds of hours of manual review.
+  - Fine-tuned a local LLM with LoRA adapters for multi-label classification, improving new label prediction accuracy.
+  - Built synthetic data generation workflows using ChromaDB + OpenAI + LLaMA for minority class augmentation, saving $10K+
+    in manual labeling costs.
+  - Built a Dockerized RAG chatbot with hybrid BM25 + contextual retrieval for large-document question answering.
+  - Developed a LangChain pipeline to extract key insights from large PDFs, automating hundreds of hours of manual review.
+  - Built a Flask application to streamline automatic retrieval of structured document information.
+  - Implemented web scraping workflows using Selenium and Puppeteer for advanced data collection.
+  - Developed an interactive Power BI dashboard to monitor platform performance KPIs.
   - Led a team of 5 on platform data integrity and quality.
+  bullets_fr:
+  - Affiné un LLM local avec des adaptateurs LoRA pour la classification multi-label, améliorant la précision sur les nouveaux labels.
+  - Construit des workflows de génération de données synthétiques avec ChromaDB + OpenAI + LLaMA pour l'augmentation des classes
+    minoritaires, économisant $10K+ en coûts d'annotation manuelle.
+  - Construit un chatbot RAG Dockerisé avec récupération hybride BM25 + contextuelle pour la question-réponse sur grands documents.
+  - Développé un pipeline LangChain pour l'extraction d'insights clés depuis de grands PDFs, automatisant des centaines d'heures
+    de revue manuelle.
+  - Construit une application Flask pour la récupération automatique d'informations structurées depuis des documents.
+  - Mis en œuvre des workflows de scraping web avec Selenium et Puppeteer pour la collecte avancée de données.
+  - Développé un tableau de bord Power BI interactif pour le suivi des KPIs de performance de la plateforme.
+  - Dirigé une équipe de 5 sur l'intégrité et la qualité des données de la plateforme.
 - company: Menara Holding
   role: Data Scientist
   start: 2022-08
@@ -67,7 +110,16 @@ experiences:
   - Boosted throughput by 15% ($12K/month) via EDA and linear regression.
   - Cut delivery time by 18% and saved $25K/year through routing analysis.
   - Forecasted demand with XGBoost at 86% accuracy, reducing overstock by 35%.
+  - Deployed a random forest model for predictive maintenance, saving $20K/year.
+  - Improved data completeness using Python (openpyxl) to standardize Excel data entry.
   - Halved reporting time with Power BI dashboards for real-time logistics KPIs.
+  bullets_fr:
+  - Augmenté le débit opérationnel de 15% ($12K/mois) via EDA et régression linéaire.
+  - Réduit le délai de livraison de 18% et économisé $25K/an grâce à l'analyse de routage.
+  - Prévu la demande avec XGBoost à 86% de précision, réduisant le surstock de 35%.
+  - Déployé un modèle random forest pour la maintenance prédictive, économisant $20K/an.
+  - Amélioré la complétude des données via Python (openpyxl) pour standardiser la saisie Excel.
+  - Divisé par deux le temps de reporting avec des tableaux de bord Power BI pour les KPI logistiques en temps réel.
 - company: MANAGEM
   role: Graduation Project
   start: 2022-02
@@ -75,7 +127,12 @@ experiences:
   location: Marrakech, Morocco
   bullets:
   - Employed statistical sampling and modeling techniques to improve data collection quality.
+  - Executed quantitative analysis for grade estimation.
   - Implemented Six Sigma methodologies to streamline operational processes.
+  bullets_fr:
+  - Utilisé des techniques d'échantillonnage statistique et de modélisation pour améliorer la qualité de la collecte de données.
+  - Réalisé des analyses quantitatives pour l'estimation de grade.
+  - Mis en œuvre des méthodologies Six Sigma pour rationaliser les processus opérationnels.
 education:
 - institution: Mohammadia School of Engineering
   degree: Data Analysis and Mining Engineer
@@ -107,6 +164,7 @@ scoring_keywords:
 - data engineering
 - data architecture
 - machine learning
+- computer vision
 - document intelligence
 - automation
 - fastapi
@@ -118,3 +176,14 @@ scoring_keywords:
 - stakeholder communication
 - ai delivery
 - cost optimization
+- deepgram
+- freshdesk
+- notion
+- web scraping
+- selenium
+- intent classification
+- synthetic data generation
+- predictive maintenance
+- flask
+- bm25
+- hybrid retrieval

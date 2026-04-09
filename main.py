@@ -58,7 +58,7 @@ def main() -> None:
 
     print(f"\n  Customy running -> http://{host}:{port}")
     print(f"  Database        -> {cfg['paths']['db_path']}")
-    print(f"  Applications    -> {cfg['paths']['applications_dir']}\n")
+    print(f"  Artifacts       -> {cfg['paths']['applications_dir']}\n")
     print(
         "  Candidate       -> "
         f"{candidate_context.get('personal', {}).get('name') or 'unknown'} "

@@ -5,10 +5,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from app.db import application_slug_exists
 from app.models import ApplicationPack
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_APPLICATIONS_DIR = PROJECT_ROOT / "applications"
+_APPLICATIONS_DIR: Path | None = None
 COVER_LETTER_FILENAME = "Ayman_Aourik_Cover_letter.txt"
 
 
@@ -17,24 +17,31 @@ def set_applications_dir(path: str) -> None:
     _APPLICATIONS_DIR = Path(path).resolve()
 
 
+def _configured_applications_dir() -> Path:
+    if _APPLICATIONS_DIR is None:
+        raise RuntimeError("Applications directory is not configured.")
+    return _APPLICATIONS_DIR
+
+
 def _slugify_text(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug or "untitled"
 
 
-def make_slug(company: str, role: str) -> str:
+def make_slug(company: str, role: str, db_path: str | None = None) -> str:
     """
     "Acme Corp" + "Data Engineer" -> "acme-corp-data-engineer-20240601"
     URL-safe, lowercase, hyphens only.
-    If applications/<slug>/ exists, append -2, -3, etc.
+    If the configured output folder or database slug already exists, append -2, -3, etc.
     """
 
+    applications_dir = _configured_applications_dir()
     company_slug = _slugify_text(company or "unknown-company")
     role_slug = _slugify_text(role or "untitled-role")
     dated_slug = f"{company_slug}-{role_slug}-{datetime.now().strftime('%Y%m%d')}"
     candidate = dated_slug
     index = 2
-    while (_APPLICATIONS_DIR / candidate).exists():
+    while (applications_dir / candidate).exists() or (db_path and application_slug_exists(db_path, candidate)):
         candidate = f"{dated_slug}-{index}"
         index += 1
     return candidate
@@ -44,13 +51,16 @@ def write_pack(
     applications_dir: str,
     slug: str,
     jd_text: str,
+    application_url: str | None,
     pack: ApplicationPack,
     tex_string: str,
     requested_outputs: list[str],
     usage_summary: dict | None = None,
+    initial_analysis: dict | None = None,
+    updated_analysis: dict | None = None,
 ) -> dict:
     """
-    Creates applications/<slug>/
+    Creates <configured applications_dir>/<slug>/
     Always writes: job_description.md, resume.tex, generated.json
     Conditionally writes: Ayman_Aourik_Cover_letter.txt, linkedin_message.md, email_draft.md
     Returns dict of all written absolute file paths.
@@ -58,7 +68,7 @@ def write_pack(
 
     base_dir = Path(applications_dir).resolve()
     output_dir = base_dir / slug
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=False)
 
     files = {
         "output_dir": str(output_dir),
@@ -74,6 +84,13 @@ def write_pack(
             {
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "requested_outputs": requested_outputs,
+                "job_application_url": application_url or None,
+                "scores": {
+                    "initial_score": (initial_analysis or {}).get("score"),
+                    "updated_score": (updated_analysis or {}).get("score"),
+                },
+                "initial_analysis": initial_analysis or {},
+                "updated_analysis": updated_analysis or {},
                 "usage": usage_summary or {},
                 "pack": pack.model_dump(),
             },

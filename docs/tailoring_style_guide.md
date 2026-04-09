@@ -19,9 +19,10 @@ Use this as the internal quality bar for resume content. It is a reference for t
 
 ## Summary Pattern
 
-- Two compact sentences.
-- Sentence one: establish level and domain.
+- Use 2 to 3 compact sentences.
+- Sentence one: name the capability this JD most needs and anchor it with the strongest real proof.
 - Sentence two: show scope, production ownership, leadership, and business impact.
+- Sentence three is optional when needed to surface JD-relevant derived concepts that are supported by the candidate evidence while staying one-page safe.
 - Imply alignment. Do not say `strong fit`, `ideal candidate`, or similar phrases.
 
 ## Experience Pattern
@@ -30,11 +31,15 @@ Use this as the internal quality bar for resume content. It is a reference for t
 - Preserve facts, tools, metrics, and outcomes.
 - Rephrase for clarity and impact when useful.
 - Prefer bullets that sound delivered, shipped, led, designed, deployed, industrialized.
+- Keep substantive end-of-study or graduation-project experience when it exists in the candidate profile.
 
 ## Skills Pattern
 
-- Reorder skills to mirror the JD.
-- Use only true skills from `candidate.yaml`.
+- Let the JD decide what to surface first.
+- Select skills from evidence across the candidate profile, not only from the handwritten `skills:` block.
+- Use only true, profile-backed skills from `candidate.yaml`.
+- Do not copy unsupported JD terms into the skills section.
+- If the JD asks for a more specific tool or framework than the profile states literally, prefer the truthful underlying capability the profile does support.
 - Favor relevant hard skills first.
 - Keep soft skills concise and secondary.
 

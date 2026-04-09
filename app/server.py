@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import re
+import shutil
+import sqlite3
+import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from app.analyzer import analyze_jd
+from app.analyzer import analyze_jd, build_updated_resume_keywords
 from app.db import (
     get_application,
     get_daily_stats,
@@ -18,12 +22,14 @@ from app.db import (
     list_applications,
     record_api_usage,
     refresh_daily_stats,
+    set_duplicate_flag,
     update_status,
 )
 from app.generator import PackGenerationError, generate_pack
 from app.latex import compile_pdf, render_tex
 from app.profile import build_candidate_context
 from app.storage import COVER_LETTER_FILENAME, make_slug, set_applications_dir, write_pack
+from app.targeting import candidate_keywords_from_profile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = PROJECT_ROOT / "app" / "templates"
@@ -34,6 +40,87 @@ RESUME_PDF_FILENAME = "Ayman_Aourik_Resume.pdf"
 
 def _artifact_url(slug: str, filename: str) -> str:
     return f"/artifacts/{slug}/{filename}"
+
+
+def _normalize_application_url(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if "://" not in raw and re.fullmatch(r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/.*)?", raw):
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Field 'application_url' must be a valid http/https URL.")
+    return parsed.geturl()
+
+
+def _clean_company_name(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).strip(" .,:;|-")
+
+
+def _company_quality(value: object) -> int:
+    company = _clean_company_name(value)
+    if not company:
+        return 0
+    lowered = company.lower()
+    if lowered in {"unknown", "unknown company", "company", "our company", "our team", "team"}:
+        return 0
+    score = 1
+    if " " in company or "&" in company or "." in company:
+        score += 1
+    if any(char.isupper() for char in company[1:]):
+        score += 1
+    if len(company) >= 5:
+        score += 1
+    return score
+
+
+def _pick_company_name(*candidates: object) -> str | None:
+    best = ""
+    best_score = 0
+    for candidate in candidates:
+        cleaned = _clean_company_name(candidate)
+        score = _company_quality(cleaned)
+        if score > best_score:
+            best = cleaned
+            best_score = score
+    return best or None
+
+
+def _open_folder_in_file_manager(path: str, applications_dir: Path) -> None:
+    target = Path(path).resolve()
+    if applications_dir != target and applications_dir not in target.parents:
+        raise ValueError("Application folder path is outside the configured applications directory.")
+    if not target.exists() or not target.is_dir():
+        raise ValueError("Application folder not found.")
+
+    command: list[str] | None = None
+    if os.name == "nt":
+        command = ["explorer.exe", str(target)]
+    elif shutil.which("explorer.exe"):
+        explorer_target = str(target)
+        if shutil.which("wslpath"):
+            try:
+                explorer_target = subprocess.check_output(
+                    ["wslpath", "-w", str(target)],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip() or explorer_target
+            except Exception:
+                explorer_target = str(target)
+        command = ["explorer.exe", explorer_target]
+    elif shutil.which("xdg-open"):
+        command = ["xdg-open", str(target)]
+    elif shutil.which("open"):
+        command = ["open", str(target)]
+
+    if not command:
+        raise ValueError("No supported file manager opener is available on this system.")
+
+    try:
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as exc:
+        raise ValueError(f"Could not open the application folder: {exc}") from exc
 
 
 def _serialize_files(slug: str, files: dict) -> dict:
@@ -47,6 +134,11 @@ def _serialize_files(slug: str, files: dict) -> dict:
 
 def _serialize_application(row: dict) -> dict:
     slug = row.get("slug", "")
+    initial_score = row.get("initial_score")
+    if initial_score is None:
+        initial_score = row.get("score")
+    updated_score = row.get("updated_score")
+    current_score = updated_score if updated_score is not None else initial_score
     outputs = {}
     if row.get("resume_pdf_path"):
         outputs["resume_pdf"] = _artifact_url(slug, Path(row["resume_pdf_path"]).name)
@@ -65,8 +157,11 @@ def _serialize_application(row: dict) -> dict:
         "created_at": row.get("created_at"),
         "company": row.get("company"),
         "role": row.get("role"),
-        "score": row.get("score"),
+        "score": current_score,
+        "initial_score": initial_score,
+        "updated_score": updated_score,
         "status": row.get("status"),
+        "is_duplicate": bool(row.get("is_duplicate")),
         "slug": slug,
         "model_used": row.get("model_used"),
         "tokens_used": row.get("tokens_used"),
@@ -76,8 +171,9 @@ def _serialize_application(row: dict) -> dict:
         "total_cost_usd": row.get("total_cost_usd"),
         "api_attempts": row.get("api_attempts"),
         "outputs": outputs,
+        "job_application_url": row.get("job_application_url"),
         "folder_path": row.get("outputs_path"),
-        "folder_url": outputs["generated_json"],
+        "folder_url": f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None,
     }
 
 
@@ -88,6 +184,19 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
         return json.loads(raw or "{}")
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON body: {exc}") from exc
+
+
+def _normalize_bool(value: object, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    text = str(value or "").strip().lower()
+    if text in {"true", "1", "yes", "on"}:
+        return True
+    if text in {"false", "0", "no", "off"}:
+        return False
+    raise ValueError(f"Field '{field_name}' must be a boolean.")
 
 
 def _normalize_outputs(raw_outputs: object) -> list[str]:
@@ -102,7 +211,15 @@ def _normalize_outputs(raw_outputs: object) -> list[str]:
 
 
 def _candidate_keywords(candidate_context: dict) -> list[str]:
-    keywords = list(candidate_context.get("scoring_keywords", []))
+    keywords = candidate_keywords_from_profile(candidate_context)
+    location = candidate_context.get("personal", {}).get("location", "").strip()
+    if location:
+        keywords.append(f"location:{location}")
+    return keywords
+
+
+def _updated_resume_keywords(pack: object, jd_analysis: dict, candidate_context: dict) -> list[str]:
+    keywords = build_updated_resume_keywords(pack, jd_analysis)
     location = candidate_context.get("personal", {}).get("location", "").strip()
     if location:
         keywords.append(f"location:{location}")
@@ -158,6 +275,20 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
+            open_folder_match = re.fullmatch(r"/api/applications/(\d+)/open-folder", parsed.path)
+            if open_folder_match:
+                try:
+                    app_id = int(open_folder_match.group(1))
+                    row = get_application(db_path, app_id)
+                    if not row:
+                        raise ValueError(f"Application {app_id} does not exist.")
+                    _open_folder_in_file_manager(str(row.get("outputs_path") or ""), applications_dir)
+                    self._json(HTTPStatus.OK, {"status": "ok"})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
             if parsed.path != "/api/generate":
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
@@ -166,15 +297,21 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 jd_text = str(payload.get("jd", "")).strip()
                 if not jd_text:
                     raise ValueError("Field 'jd' is required.")
+                application_url = _normalize_application_url(payload.get("application_url"))
                 requested_outputs = _normalize_outputs(payload.get("outputs"))
                 candidate_context = build_candidate_context(candidate_yaml_path)
-                jd_analysis = analyze_jd(jd_text, _candidate_keywords(candidate_context))
+                initial_analysis = analyze_jd(
+                    jd_text,
+                    _candidate_keywords(candidate_context),
+                    application_url=application_url,
+                )
                 try:
-                    pack, usage_summary = generate_pack(
+                    pack, usage_summary, detected_company = generate_pack(
                         jd_text=jd_text,
-                        jd_analysis=jd_analysis,
+                        jd_analysis=initial_analysis,
                         candidate_context=candidate_context,
                         outputs=requested_outputs,
+                        application_url=application_url,
                         config=cfg,
                     )
                 except PackGenerationError as exc:
@@ -188,47 +325,76 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         )
                     raise ValueError(str(exc)) from exc
 
+                updated_analysis = analyze_jd(
+                    jd_text,
+                    _updated_resume_keywords(pack, initial_analysis, candidate_context),
+                    application_url=application_url,
+                )
                 tokens_used = int(usage_summary.get("total_tokens") or 0)
                 model_used = str(usage_summary.get("model_used") or cfg["llm"]["model"])
-                company = jd_analysis.get("company") or "Unknown Company"
-                role = jd_analysis.get("role") or "Untitled Role"
-                slug = make_slug(company, role)
-                tex_string = render_tex(candidate_context, pack, jd_analysis)
-                files = write_pack(
-                    applications_dir=str(applications_dir),
-                    slug=slug,
-                    jd_text=jd_text,
-                    pack=pack,
-                    tex_string=tex_string,
-                    requested_outputs=requested_outputs,
-                    usage_summary=usage_summary,
-                )
-                pdf_path = compile_pdf(
-                    files["resume_tex"],
-                    files["output_dir"],
-                    output_filename=RESUME_PDF_FILENAME,
-                )
-                if pdf_path:
-                    files["resume_pdf"] = pdf_path
-                app_id = insert_application(
-                    db_path=db_path,
-                    company=company,
-                    role=role,
-                    slug=slug,
-                    jd_raw=jd_text,
-                    jd_language=jd_analysis.get("language"),
-                    jd_location=jd_analysis.get("location"),
-                    outputs_path=files["output_dir"],
-                    resume_tex_path=files["resume_tex"],
-                    resume_pdf_path=files.get("resume_pdf"),
-                    cover_letter="cover_letter" in requested_outputs,
-                    linkedin_msg="linkedin_msg" in requested_outputs,
-                    email_draft="email_draft" in requested_outputs,
-                    tokens_used=tokens_used,
-                    model_used=model_used,
-                    score=float(jd_analysis.get("score") or 0.0),
-                    usage_summary=usage_summary,
-                )
+                company = _pick_company_name(initial_analysis.get("company"), detected_company) or "Unknown Company"
+                role = initial_analysis.get("role") or "Untitled Role"
+                tex_string = render_tex(candidate_context, pack, initial_analysis)
+                last_slug_error = ""
+                for _ in range(8):
+                    slug = make_slug(company, role, db_path=db_path)
+                    try:
+                        files = write_pack(
+                            applications_dir=str(applications_dir),
+                            slug=slug,
+                            jd_text=jd_text,
+                            application_url=application_url,
+                            pack=pack,
+                            tex_string=tex_string,
+                            requested_outputs=requested_outputs,
+                            usage_summary=usage_summary,
+                            initial_analysis=initial_analysis,
+                            updated_analysis=updated_analysis,
+                        )
+                    except FileExistsError:
+                        last_slug_error = f"Output folder already exists for slug {slug}."
+                        continue
+
+                    pdf_path = compile_pdf(
+                        files["resume_tex"],
+                        files["output_dir"],
+                        output_filename=RESUME_PDF_FILENAME,
+                    )
+                    if pdf_path:
+                        files["resume_pdf"] = pdf_path
+
+                    try:
+                        app_id = insert_application(
+                            db_path=db_path,
+                            company=company,
+                            role=role,
+                            slug=slug,
+                            jd_raw=jd_text,
+                            jd_language=initial_analysis.get("language"),
+                            jd_location=initial_analysis.get("location"),
+                            job_application_url=application_url,
+                            outputs_path=files["output_dir"],
+                            resume_tex_path=files["resume_tex"],
+                            resume_pdf_path=files.get("resume_pdf"),
+                            cover_letter="cover_letter" in requested_outputs,
+                            linkedin_msg="linkedin_msg" in requested_outputs,
+                            email_draft="email_draft" in requested_outputs,
+                            tokens_used=tokens_used,
+                            model_used=model_used,
+                            initial_score=float(initial_analysis.get("score") or 0.0),
+                            updated_score=float(updated_analysis.get("score") or 0.0),
+                            usage_summary=usage_summary,
+                        )
+                        break
+                    except sqlite3.IntegrityError as exc:
+                        if "applications.slug" not in str(exc).lower() and "applications.slug" not in repr(exc).lower():
+                            raise
+                        last_slug_error = str(exc)
+                        continue
+                else:
+                    raise ValueError(
+                        last_slug_error or "Could not allocate a unique application slug after multiple attempts."
+                    )
                 record_api_usage(
                     db_path,
                     usage_summary.get("attempts", []),
@@ -243,10 +409,15 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         "app_id": app_id,
                         "company": company,
                         "role": role,
-                        "score": jd_analysis.get("score"),
+                        "application_url": application_url,
+                        "score": updated_analysis.get("score"),
+                        "initial_score": initial_analysis.get("score"),
+                        "updated_score": updated_analysis.get("score"),
                         "tokens_used": tokens_used,
                         "usage": usage_summary,
-                        "analysis": jd_analysis,
+                        "analysis": initial_analysis,
+                        "initial_analysis": initial_analysis,
+                        "updated_analysis": updated_analysis,
                         "pack": pack.model_dump(),
                         "files": _serialize_files(slug, files),
                     },
@@ -258,6 +429,22 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
         def do_PATCH(self) -> None:
             parsed = urlparse(self.path)
+            duplicate_match = re.fullmatch(r"/api/applications/(\d+)/duplicate", parsed.path)
+            if duplicate_match:
+                try:
+                    payload = _read_json(self)
+                    app_id = int(duplicate_match.group(1))
+                    is_duplicate = _normalize_bool(payload.get("is_duplicate"), "is_duplicate")
+                    detail = str(payload.get("detail", "")).strip()
+                    set_duplicate_flag(db_path, app_id, is_duplicate, detail)
+                    refresh_daily_stats(db_path)
+                    row = get_application(db_path, app_id)
+                    self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
             match = re.fullmatch(r"/api/applications/(\d+)/status", parsed.path)
             if not match:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -321,12 +508,15 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             if applications_dir not in path.parents or not path.is_file():
                 raise ValueError("Artifact not found.")
             mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            self._serve_file(path, mime)
+            attachment_filename = path.name if path.name == COVER_LETTER_FILENAME else None
+            self._serve_file(path, mime, attachment_filename=attachment_filename)
 
-        def _serve_file(self, path: Path, content_type: str) -> None:
+        def _serve_file(self, path: Path, content_type: str, attachment_filename: str | None = None) -> None:
             content = path.read_bytes()
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
+            if attachment_filename:
+                self.send_header("Content-Disposition", f'attachment; filename="{attachment_filename}"')
             self.send_header("Content-Length", str(len(content)))
             self.end_headers()
             self.wfile.write(content)

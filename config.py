@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -23,6 +24,11 @@ def load_config() -> dict:
         cfg = yaml.safe_load(handle) or {}
     for key, value in cfg.get("paths", {}).items():
         cfg["paths"][key] = _resolve_path(value)
+    llm = cfg.setdefault("llm", {})
+    if os.environ.get("GENERATION_MODEL"):
+        llm["generation_model"] = os.environ["GENERATION_MODEL"].strip()
+    if os.environ.get("ANALYSIS_MODEL"):
+        llm["analysis_model"] = os.environ["ANALYSIS_MODEL"].strip()
     return cfg
 
 

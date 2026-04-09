@@ -51,6 +51,7 @@
             <div>
               <span class="eyebrow">Applications</span>
               <h2 class="serif">History</h2>
+              <p class="section-note">Duplicate rows stay in history but are excluded from generated, applied, and interview stats.</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -60,9 +61,11 @@
                   <th>Date</th>
                   <th>Company</th>
                   <th>Role</th>
-                  <th>Score</th>
+                  <th>Initial Score</th>
+                  <th>Updated Score</th>
                   <th>Cost</th>
                   <th>Status</th>
+                  <th>Job URL</th>
                   <th>Outputs</th>
                   <th>Actions</th>
                 </tr>
@@ -103,6 +106,19 @@
         return "$" + n.toFixed(n < 0.01 ? 6 : 4);
       }
 
+      function formatScore(value) {
+        if (value === null || value === undefined || value === "") return "-";
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(1) : "-";
+      }
+
+      function scoreBadge(score) {
+        if (score === null || score === undefined || score === "") return '<span class="subtext">-</span>';
+        const numeric = Number(score);
+        if (!Number.isFinite(numeric)) return '<span class="subtext">-</span>';
+        return `<span class="score-badge ${scoreClass(numeric)}">${numeric.toFixed(1)}</span>`;
+      }
+
       async function fetchJson(url, options = {}) {
         const res = await fetch(url, options);
         const data = await res.json();
@@ -137,7 +153,8 @@
         const items = [
           ["Applications this week", stats.applications_this_week || 0],
           ["Applications this month", stats.applications_this_month || 0],
-          ["Average score", stats.average_score || 0],
+          ["Average initial score", formatScore(stats.average_initial_score)],
+          ["Average updated score", formatScore(stats.average_updated_score)],
           ["Most targeted role", stats.most_targeted_role || "-"],
         ];
         quickStats.innerHTML = "";
@@ -181,6 +198,18 @@
         });
       }
 
+      async function updateDuplicateFlag(id, isDuplicate) {
+        await fetchJson(`/api/applications/${id}/duplicate`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_duplicate: isDuplicate })
+        });
+      }
+
+      async function openFolder(folderUrl) {
+        await fetchJson(folderUrl, { method: "POST" });
+      }
+
       function outputLinks(outputs) {
         const labels = {
           resume_pdf: "📄",
@@ -193,22 +222,56 @@
         wrap.className = "outputs-cell";
         Object.entries(outputs || {}).forEach(([key, url]) => {
           if (key === "generated_json") return;
+          const filename = (() => {
+            try {
+              return new URL(url, window.location.origin).pathname.split("/").pop();
+            } catch (error) {
+              return "";
+            }
+          })();
           const link = document.createElement("a");
           link.className = "icon-link";
           link.href = url;
-          link.target = "_blank";
-          link.rel = "noreferrer";
+          if (key === "cover_letter") {
+            link.download = filename || "Ayman_Aourik_Cover_letter.txt";
+          } else {
+            link.target = "_blank";
+            link.rel = "noreferrer";
+          }
           link.textContent = labels[key] || key[0].toUpperCase();
-          link.title = key;
+          link.title = filename || key;
           wrap.appendChild(link);
         });
         return wrap;
+      }
+
+      function jobApplicationLink(url) {
+        if (!url) {
+          const placeholder = document.createElement("span");
+          placeholder.className = "subtext";
+          placeholder.textContent = "-";
+          return placeholder;
+        }
+        const link = document.createElement("a");
+        link.className = "small-button job-link";
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        try {
+          const parsed = new URL(url);
+          link.textContent = parsed.hostname.replace(/^www\./, "");
+        } catch (error) {
+          link.textContent = "Open";
+        }
+        link.title = url;
+        return link;
       }
 
       function renderApplications(items) {
         applicationsBody.innerHTML = "";
         items.forEach((item) => {
           const row = document.createElement("tr");
+          if (item.is_duplicate) row.classList.add("duplicate-row");
           const select = document.createElement("select");
           select.className = "status-select";
           statusOptions.forEach((status) => {
@@ -221,36 +284,73 @@
           select.addEventListener("change", async () => {
             try {
               await updateStatus(item.id, select.value);
+              await loadDashboard();
             } catch (error) {
               alert(error.message);
               select.value = item.status;
             }
           });
 
-          const actionLink = document.createElement("a");
-          actionLink.className = "small-button";
-          actionLink.href = item.folder_url;
-          actionLink.target = "_blank";
-          actionLink.rel = "noreferrer";
-          actionLink.textContent = "📁";
-          actionLink.title = item.folder_path || "";
+          const actionWrap = document.createElement("div");
+          actionWrap.className = "table-button-row";
+
+          const folderButton = document.createElement("button");
+          folderButton.type = "button";
+          folderButton.className = "small-button";
+          folderButton.textContent = "📁";
+          folderButton.title = item.folder_path || "";
+          folderButton.disabled = !item.folder_url;
+          folderButton.addEventListener("click", async () => {
+            if (!item.folder_url) return;
+            folderButton.disabled = true;
+            try {
+              await openFolder(item.folder_url);
+            } catch (error) {
+              alert(error.message);
+            } finally {
+              folderButton.disabled = false;
+            }
+          });
+          actionWrap.appendChild(folderButton);
+
+          const duplicateButton = document.createElement("button");
+          duplicateButton.type = "button";
+          duplicateButton.className = `small-button ${item.is_duplicate ? "flag-active" : ""}`.trim();
+          duplicateButton.textContent = item.is_duplicate ? "Undup" : "Dup";
+          duplicateButton.title = item.is_duplicate ? "Include this row in funnel and activity stats again" : "Mark this row as a duplicate and exclude it from funnel and activity stats";
+          duplicateButton.addEventListener("click", async () => {
+            duplicateButton.disabled = true;
+            try {
+              await updateDuplicateFlag(item.id, !item.is_duplicate);
+              await loadDashboard();
+            } catch (error) {
+              alert(error.message);
+            } finally {
+              duplicateButton.disabled = false;
+            }
+          });
+          actionWrap.appendChild(duplicateButton);
 
           row.innerHTML = `
             <td>${(item.created_at || "").slice(0, 10)}</td>
-            <td>${item.company || ""}</td>
+            <td>${item.company || ""}${item.is_duplicate ? ' <span class="flag-badge">Duplicate</span>' : ""}</td>
             <td>${item.role || ""}</td>
-            <td><span class="score-badge ${scoreClass(item.score)}">${Number(item.score || 0).toFixed(1)}</span></td>
+            <td>${scoreBadge(item.initial_score)}</td>
+            <td>${scoreBadge(item.updated_score)}</td>
             <td>${item.total_cost_usd != null ? formatUsd(item.total_cost_usd) : "-"}</td>
           `;
 
           const statusCell = document.createElement("td");
           statusCell.appendChild(select);
+          const jobUrlCell = document.createElement("td");
+          jobUrlCell.appendChild(jobApplicationLink(item.job_application_url));
           const outputsCell = document.createElement("td");
           outputsCell.appendChild(outputLinks(item.outputs));
           const actionsCell = document.createElement("td");
-          actionsCell.appendChild(actionLink);
+          actionsCell.appendChild(actionWrap);
 
           row.appendChild(statusCell);
+          row.appendChild(jobUrlCell);
           row.appendChild(outputsCell);
           row.appendChild(actionsCell);
           applicationsBody.appendChild(row);

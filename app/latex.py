@@ -120,7 +120,8 @@ def _duration_from_dates(start: str, end: str, resume_language: str = "en") -> s
     if not end_parts:
         return ""
 
-    months = (end_parts[0] - start_parts[0]) * 12 + (end_parts[1] - start_parts[1])
+    # Resume dates are month-precision only, so count both boundary months.
+    months = ((end_parts[0] - start_parts[0]) * 12 + (end_parts[1] - start_parts[1])) + 1
     if months <= 0:
         return ""
     years, remainder = divmod(months, 12)
@@ -234,8 +235,6 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
         location = _escape(meta.get("location", ""))
         duration = str(meta.get("duration", "") or "").strip() or _duration_from_dates(item.start, item.end, resume_language)
         title_line = f"{_escape(item.role)}: {_escape(item.company)}"
-        if duration:
-            title_line += f" ({_escape(duration)})"
         job_blocks.extend(
             [
                 rf"\resjob{{{_escape(period)}}}{{{location}}}{{{title_line}}}{{{_escape(duration)}}}{{",
@@ -272,8 +271,8 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
 
     return "\n".join(
         [
-            r"\documentclass[8.5pt,a4paper]{article}",
-            r"\usepackage[margin=0.40in]{geometry}",
+            r"\documentclass[8pt,a4paper]{extarticle}",
+            r"\usepackage[margin=0.34in]{geometry}",
             r"\usepackage[T1]{fontenc}",
             r"\usepackage[utf8]{inputenc}",
             r"\usepackage{lmodern}",
@@ -283,30 +282,31 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
             r"\usepackage{tabularx}",
             r"\usepackage{marvosym}",
             r"\pagestyle{empty}",
+            r"\flushbottom",
             r"\setlength{\parindent}{0pt}",
-            r"\setlength{\parskip}{1pt}",
+            r"\setlength{\parskip}{0.35pt plus 0.35pt minus 0.15pt}",
             r"\titleformat{\section}{\normalsize\bfseries}{}{0em}{}[\titlerule]",
-            r"\titlespacing*{\section}{0pt}{5pt}{3pt}",
-            r"\setlist[itemize]{leftmargin=1.1em,itemsep=0pt,topsep=0.5pt,parsep=0pt,partopsep=0pt}",
+            r"\titlespacing*{\section}{0pt}{2.5pt plus 0.8pt minus 0.4pt}{1.2pt plus 0.4pt minus 0.2pt}",
+            r"\setlist[itemize]{leftmargin=1.0em,itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt}",
             "",
             r"\newcommand{\resheading}[1]{\section*{#1}}",
             r"\newcommand{\resjob}[5]{",
             r"\noindent\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}@{\hspace{0.03\textwidth}}X@{}}",
             r"\raggedright #1\\#2 &",
-            r"\textbf{#3}\\",
+            r"\textbf{#3} (#4)\\",
             r"& #5",
-            r"\end{tabularx}\vspace{1pt}",
+            r"\end{tabularx}\vspace{0pt}",
             r"}",
             r"\newcommand{\resedu}[3]{",
             r"\noindent\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}@{\hspace{0.03\textwidth}}X@{}}",
             r"\raggedright #1 & \textbf{#2}\\",
             r"& #3",
-            r"\end{tabularx}\vspace{1pt}",
+            r"\end{tabularx}\vspace{0pt}",
             r"}",
             "",
             r"\begin{document}",
             "",
-            rf"{{\Large \textbf{{{_escape(personal.get('name', ''))}}} \ \textit{{{_escape(tailored.tailored_title)}}}}}\\[5pt]",
+            rf"{{\Large \textbf{{{_escape(personal.get('name', ''))}}} \ \textit{{{_escape(tailored.tailored_title)}}}}}\\[2pt]",
             r"\begin{tabularx}{\textwidth}{@{}X X@{}}",
             *contact_rows,
             r"\end{tabularx}",

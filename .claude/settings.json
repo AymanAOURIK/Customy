@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Write(app/**)",
+      "Write(prompts/**)",
+      "Write(resume/**)",
+      "Write(docs/**)",
+      "Bash(python*)",
+      "Bash(pdflatex*)",
+      "Bash(sqlite3*)"
+    ],
+    "deny": [
+      "Write(candidate.yaml)",
+      "Write(config.yaml)",
+      "Bash(pip install*)",
+      "Bash(npm*)",
+      "Bash(curl*)",
+      "Bash(wget*)"
+    ]
+  }
+}

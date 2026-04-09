@@ -25,6 +25,11 @@ DEFAULT_TEXT_PRICING = {
         "cached_input_per_million_usd": Decimal("0.10"),
         "output_per_million_usd": Decimal("1.60"),
     },
+    "gpt-4.1": {
+        "input_per_million_usd": Decimal("2.00"),
+        "cached_input_per_million_usd": Decimal("0.50"),
+        "output_per_million_usd": Decimal("8.00"),
+    },
 }
 
 SNAPSHOT_SUFFIX = re.compile(r"-\d{4}-\d{2}-\d{2}$")

@@ -22,6 +22,13 @@
           <h2 class="serif">Paste a job description and generate the pack.</h2>
           <label class="field-label" for="jd-input">Job description</label>
           <textarea id="jd-input" rows="20" placeholder="Paste job description here..."></textarea>
+          <label class="field-label" for="application-url-input">Application URL</label>
+          <input
+            id="application-url-input"
+            class="text-input"
+            type="url"
+            placeholder="https://company.com/jobs/role"
+          />
 
           <div class="toggle-list">
             <label class="toggle">
@@ -64,8 +71,12 @@
               <strong id="analysis-language">-</strong>
             </div>
             <div class="info-chip">
-              <span class="eyebrow">Score</span>
-              <strong id="analysis-score">-</strong>
+              <span class="eyebrow">Initial Score</span>
+              <strong id="analysis-initial-score">-</strong>
+            </div>
+            <div class="info-chip">
+              <span class="eyebrow">Updated Score</span>
+              <strong id="analysis-updated-score">-</strong>
             </div>
             <div class="info-chip">
               <span class="eyebrow">Model</span>
@@ -98,6 +109,7 @@
 
     <script>
       const jdInput = document.getElementById("jd-input");
+      const applicationUrlInput = document.getElementById("application-url-input");
       const generateBtn = document.getElementById("generate-btn");
       const statusBanner = document.getElementById("status-banner");
       const tabButtons = document.getElementById("tab-buttons");
@@ -126,6 +138,12 @@
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) return "-";
         return `$${numeric.toFixed(numeric < 0.01 ? 6 : 4)}`;
+      }
+
+      function formatScore(value) {
+        if (value === null || value === undefined || value === "") return "-";
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(1) : "-";
       }
 
       function resumePreview(pack) {
@@ -216,12 +234,18 @@
         downloadLinks.innerHTML = "";
         Object.entries(files).forEach(([key, file]) => {
           if (!file.url) return;
+          const filename = (file.path || file.url || "").split(/[\\/]/).pop();
           const link = document.createElement("a");
           link.className = "download-link";
           link.href = file.url;
-          link.target = "_blank";
-          link.rel = "noreferrer";
-          link.textContent = key.replaceAll("_", " ");
+          if (key === "cover_letter") {
+            link.download = filename || "Ayman_Aourik_Cover_letter.txt";
+          } else {
+            link.target = "_blank";
+            link.rel = "noreferrer";
+          }
+          link.textContent = key === "cover_letter" ? (filename || "cover_letter.txt") : key.replaceAll("_", " ");
+          link.title = filename || key;
           downloadLinks.appendChild(link);
         });
       }
@@ -231,7 +255,8 @@
         document.getElementById("analysis-company").textContent = data.company || "-";
         document.getElementById("analysis-role").textContent = data.role || "-";
         document.getElementById("analysis-language").textContent = data.analysis.language || "-";
-        document.getElementById("analysis-score").textContent = data.score ?? "-";
+        document.getElementById("analysis-initial-score").textContent = formatScore(data.initial_score);
+        document.getElementById("analysis-updated-score").textContent = formatScore(data.updated_score);
         document.getElementById("analysis-model").textContent = usage.model_used || "-";
         document.getElementById("analysis-prompt-tokens").textContent = formatNumber(usage.prompt_tokens);
         document.getElementById("analysis-output-tokens").textContent = formatNumber(usage.completion_tokens);
@@ -253,7 +278,11 @@
           const res = await fetch("/api/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jd: jdText, outputs: selectedOutputs() })
+            body: JSON.stringify({
+              jd: jdText,
+              application_url: applicationUrlInput.value.trim(),
+              outputs: selectedOutputs()
+            })
           });
           const data = await res.json();
           if (data.error) {
