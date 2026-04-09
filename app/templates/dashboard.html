@@ -100,7 +100,13 @@
                 <p>Your job search command center</p>
               </div>
               <div class="page-header-actions">
-                <a href="/" class="btn-primary">+ New Application</a>
+                <a
+                  href="#tailoring-studio"
+                  class="btn-primary platform-nav-link"
+                  data-section-target="section-tailoring-studio"
+                >
+                  + New Application
+                </a>
               </div>
             </div>
 
@@ -254,17 +260,149 @@
             <div class="page-header">
               <div>
                 <h1>Tailoring Studio</h1>
-                <p>Craft tailored resumes and cover letters</p>
-              </div>
-              <div class="page-header-actions">
-                <a href="/" class="btn-primary">Open Generator</a>
+                <p>Build tailored application packs inside the new platform workspace</p>
               </div>
             </div>
-            <div class="shell-card">
-              <div class="placeholder-section">
-                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                <h3 class="placeholder-title">Tailoring Studio</h3>
-                <p class="placeholder-text">The full tailoring workspace will live here. Use the generator for now.</p>
+
+            <div class="tailoring-workspace">
+              <div class="shell-card studio-input-card">
+                <div class="shell-card-header studio-header-stack">
+                  <div>
+                    <h3 class="shell-card-title">Job Brief</h3>
+                    <p class="shell-card-subtitle">Paste the role description and choose which outputs to generate</p>
+                  </div>
+                  <span class="studio-pill">Local-only flow</span>
+                </div>
+
+                <label class="studio-label" for="studio-jd-input">Job description</label>
+                <textarea
+                  id="studio-jd-input"
+                  class="studio-textarea"
+                  rows="18"
+                  placeholder="Paste the job description here..."
+                ></textarea>
+
+                <label class="studio-label" for="studio-application-url-input">Application URL</label>
+                <input
+                  id="studio-application-url-input"
+                  class="studio-text-input"
+                  type="url"
+                  placeholder="https://company.com/jobs/role"
+                />
+
+                <div class="studio-toggle-section">
+                  <div class="studio-toggle-header">
+                    <h4>Additional outputs</h4>
+                    <p>Select the extra materials you want in the pack</p>
+                  </div>
+
+                  <div class="studio-toggle-grid">
+                    <label class="studio-toggle-card">
+                      <input type="checkbox" id="studio-cover-letter-toggle" />
+                      <span class="studio-toggle-copy">
+                        <strong>Cover letter</strong>
+                        <span>Generate a tailored cover letter alongside the resume</span>
+                      </span>
+                    </label>
+
+                    <label class="studio-toggle-card">
+                      <input type="checkbox" id="studio-linkedin-toggle" />
+                      <span class="studio-toggle-copy">
+                        <strong>LinkedIn message</strong>
+                        <span>Prepare a short outreach note for recruiters or hiring managers</span>
+                      </span>
+                    </label>
+
+                    <label class="studio-toggle-card">
+                      <input type="checkbox" id="studio-email-toggle" />
+                      <span class="studio-toggle-copy">
+                        <strong>Email draft</strong>
+                        <span>Create a concise follow-up email draft for the application</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <button id="studio-generate-btn" class="btn-primary studio-generate-btn">Generate Pack</button>
+                <div id="studio-status-banner" class="studio-status-banner">Ready.</div>
+              </div>
+
+              <div class="studio-preview-column">
+                <div class="shell-card">
+                  <div class="shell-card-header">
+                    <div>
+                      <h3 class="shell-card-title">Generation Snapshot</h3>
+                      <p class="shell-card-subtitle">Analysis, scores, and model usage for the current run</p>
+                    </div>
+                  </div>
+
+                  <div class="studio-analysis-grid">
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Company</span>
+                      <strong id="studio-analysis-company">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Role</span>
+                      <strong id="studio-analysis-role">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Language</span>
+                      <strong id="studio-analysis-language">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Initial Score</span>
+                      <strong id="studio-analysis-initial-score">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Updated Score</span>
+                      <strong id="studio-analysis-updated-score">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Model</span>
+                      <strong id="studio-analysis-model">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Prompt Tokens</span>
+                      <strong id="studio-analysis-prompt-tokens">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Output Tokens</span>
+                      <strong id="studio-analysis-output-tokens">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Cached Tokens</span>
+                      <strong id="studio-analysis-cached-tokens">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">OpenAI Cost</span>
+                      <strong id="studio-analysis-cost">-</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="shell-card">
+                  <div class="shell-card-header">
+                    <div>
+                      <h3 class="shell-card-title">Pack Preview</h3>
+                      <p class="shell-card-subtitle">Review the generated content before opening the saved files</p>
+                    </div>
+                  </div>
+
+                  <div id="studio-download-links" class="studio-download-links"></div>
+                  <div id="studio-tab-buttons" class="studio-tab-buttons"></div>
+                  <div id="studio-tab-panes" class="studio-tab-panes">
+                    <div id="studio-empty-state" class="studio-empty-state">
+                      <svg class="studio-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <path d="M8 13h8" />
+                        <path d="M8 17h5" />
+                      </svg>
+                      <h3>Nothing generated yet</h3>
+                      <p>Paste a job description on the left and run the generator to preview the tailored pack here.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -388,6 +526,7 @@
     </div>
 
     <script src="/static/dashboard-shell.js"></script>
+    <script src="/static/tailoring-studio.js"></script>
     <!-- Future agent scripts — will load when built -->
     <script src="/static/market-intel.js" defer></script>
     <script src="/static/profile-intelligence-data.js" defer></script>

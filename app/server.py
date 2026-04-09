@@ -240,7 +240,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             parsed = urlparse(self.path)
             try:
                 if parsed.path == "/":
-                    self._serve_file(TEMPLATES_DIR / "index.html", "text/html; charset=utf-8")
+                    self._serve_file(TEMPLATES_DIR / "dashboard.html", "text/html; charset=utf-8")
                     return
                 if parsed.path == "/dashboard":
                     self._serve_file(TEMPLATES_DIR / "dashboard.html", "text/html; charset=utf-8")

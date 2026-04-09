@@ -7,6 +7,7 @@
   var sidebarToggle = document.getElementById("sidebar-toggle");
   var sidebarOverlay = document.getElementById("sidebar-overlay");
   var sidebarLinks = document.querySelectorAll(".sidebar-link[data-section]");
+  var navTriggers = document.querySelectorAll("[data-section-target]");
   var sections = document.querySelectorAll(".platform-section");
 
   function navigateTo(sectionId) {
@@ -22,12 +23,20 @@
     }
   }
 
-  sidebarLinks.forEach(function (link) {
+  function bindNavigationLink(link, sectionId) {
     link.addEventListener("click", function (e) {
       e.preventDefault();
-      navigateTo(link.dataset.section);
+      navigateTo(sectionId);
       history.replaceState(null, "", link.getAttribute("href"));
     });
+  }
+
+  sidebarLinks.forEach(function (link) {
+    bindNavigationLink(link, link.dataset.section);
+  });
+
+  navTriggers.forEach(function (link) {
+    bindNavigationLink(link, link.dataset.sectionTarget);
   });
 
   sidebarToggle.addEventListener("click", function () {
@@ -531,6 +540,15 @@
         console.error("Dashboard load failed:", err);
       });
   }
+
+  window.CustomyDashboard = {
+    navigateTo: navigateTo,
+    refresh: loadDashboard,
+  };
+
+  window.addEventListener("customy:application-generated", function () {
+    loadDashboard();
+  });
 
   loadDashboard();
 })();
