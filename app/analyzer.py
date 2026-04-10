@@ -163,6 +163,88 @@ _ROLE_TOKEN_EQUIVALENTS = {
 _ROLE_FAMILY_TOKENS = {"engineer", "lead", "scientist", "manager", "architect", "developer", "analyst"}
 _ROLE_DOMAIN_TOKENS = {"ai", "data"}
 
+_ARCHETYPES: dict[str, dict] = {
+    "ai_platform": {
+        "label": "AI Platform / LLMOps",
+        "signals": [
+            "mlops", "observability", "evals", "evaluation framework", "model deployment",
+            "model serving", "inference", "latency", "monitoring", "model registry",
+            "feature store", "training pipeline", "mlflow", "kubeflow", "model performance",
+            "serving infrastructure", "model lifecycle",
+        ],
+    },
+    "agentic": {
+        "label": "Agentic / Automation",
+        "signals": [
+            "ai agent", "agentic", "multi-agent", "orchestration", "human-in-the-loop",
+            "hitl", "langgraph", "tool use", "tool calling", "workflow automation",
+            "autonomous", "function calling", "task automation", "agent framework",
+            "agentic workflow", "ai automation",
+        ],
+    },
+    "ai_pm": {
+        "label": "Technical AI PM",
+        "signals": [
+            "prd", "product roadmap", "roadmap", "product discovery", "stakeholder management",
+            "product requirements", "go-to-market", "user stories", "product manager",
+            "product lead", "product strategy", "sprint planning", "product vision",
+        ],
+    },
+    "ai_architect": {
+        "label": "AI Solutions Architect",
+        "signals": [
+            "solution architect", "solutions architect", "technical architecture",
+            "system design", "enterprise architecture", "api design", "data architecture",
+            "integration architecture", "scalable architecture", "architecture review",
+        ],
+    },
+    "ai_forward_deployed": {
+        "label": "AI Forward Deployed",
+        "signals": [
+            "client-facing", "forward deployed", "consulting", "implementation",
+            "solutions engineer", "customer success", "professional services",
+            "presales", "pre-sales", "customer facing", "client engagement",
+            "field engineering", "technical account",
+        ],
+    },
+    "ai_transformation": {
+        "label": "AI Transformation",
+        "signals": [
+            "change management", "adoption", "enablement", "upskilling",
+            "digital transformation", "ai adoption", "organizational change",
+            "training program", "ai strategy", "center of excellence",
+            "ai literacy", "capability building",
+        ],
+    },
+}
+
+_ATS_EXACT_PHRASES = [
+    "machine learning", "deep learning", "natural language processing",
+    "large language models", "retrieval augmented generation", "retrieval-augmented generation",
+    "computer vision", "reinforcement learning", "transfer learning",
+    "prompt engineering", "fine-tuning", "model evaluation",
+    "vector database", "semantic search", "knowledge graph",
+    "data engineering", "data science", "data analytics", "data architecture",
+    "software engineering", "backend engineering", "api development",
+    "distributed systems", "cloud infrastructure", "microservices",
+    "ci/cd", "continuous integration", "technical leadership",
+    "stakeholder management", "product roadmap", "agile methodology",
+    "llm orchestration", "model deployment", "feature engineering",
+]
+
+_ATS_VENDOR_PATTERNS: dict[str, list[str]] = {
+    "greenhouse": ["boards.greenhouse.io", "greenhouse.io"],
+    "lever": ["jobs.lever.co", "lever.co"],
+    "workday": ["myworkdayjobs.com", "workdayjobs.com"],
+    "ashby": ["jobs.ashbyhq.com", "ashbyhq.com"],
+    "smartrecruiters": ["smartrecruiters.com"],
+    "workable": ["apply.workable.com", "workable.com"],
+    "bamboohr": ["bamboohr.com"],
+    "icims": ["icims.com"],
+    "taleo": ["taleo.net"],
+    "successfactors": ["successfactors.com", "successfactors.eu"],
+}
+
 
 def _lines(text: str) -> list[str]:
     cleaned = []
@@ -516,6 +598,31 @@ def _requirement_is_covered(requirement: str, candidate_keywords: list[str], can
     return False
 
 
+def _detect_archetype(text: str) -> str:
+    text_lower = (text or "").lower()
+    scores: dict[str, int] = {
+        key: sum(1 for s in data["signals"] if s in text_lower)
+        for key, data in _ARCHETYPES.items()
+    }
+    best = max(scores, key=lambda k: scores[k])
+    return best if scores[best] > 0 else "general"
+
+
+def _detect_ats_vendor(application_url: str | None) -> str | None:
+    if not application_url:
+        return None
+    url_lower = application_url.lower()
+    for vendor, patterns in _ATS_VENDOR_PATTERNS.items():
+        if any(p in url_lower for p in patterns):
+            return vendor
+    return None
+
+
+def _extract_exact_phrases(text: str) -> list[str]:
+    text_lower = (text or "").lower()
+    return [phrase for phrase in _ATS_EXACT_PHRASES if phrase in text_lower]
+
+
 def build_updated_resume_keywords(pack: object, jd_analysis: dict | None = None) -> list[str]:
     tailored_skills = getattr(pack, "tailored_skills", {}) or {}
     focus_areas = list(getattr(pack, "focus_areas", []) or [])
@@ -586,6 +693,9 @@ def analyze_jd(jd_text: str, candidate_keywords: list[str], application_url: str
     location = _extract_location(text, first_lines)
     top_requirements = _extract_top_requirements(text)
     keyword_signals = _extract_keyword_signals(text)
+    archetype = _detect_archetype(text)
+    ats_vendor = _detect_ats_vendor(application_url)
+    exact_phrases = _extract_exact_phrases(text)
 
     actual_keywords: list[str] = []
     candidate_location = ""
@@ -643,6 +753,9 @@ def analyze_jd(jd_text: str, candidate_keywords: list[str], application_url: str
         "location": location,
         "language": language,
         "seniority": seniority if seniority else "unknown",
+        "archetype": archetype,
+        "ats_vendor": ats_vendor,
+        "exact_phrases": exact_phrases,
         "matched_keywords": matched_keywords,
         "related_keyword_matches": related_keyword_matches,
         "covered_keyword_signals": direct_signal_matches,

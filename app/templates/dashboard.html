@@ -275,14 +275,89 @@
             <div class="page-header">
               <div>
                 <h1>Apply Queue</h1>
-                <p>Manage your application pipeline</p>
+                <p>Generated applications ready to submit — sorted by fit score</p>
+              </div>
+              <div class="page-header-actions">
+                <span id="aq-ready-count" class="aq-count-chip">0 ready</span>
               </div>
             </div>
+
+            <!-- Filter bar -->
+            <div class="shell-card aq-filter-bar">
+              <div class="aq-filter-row">
+                <span class="aq-filter-label">Archetype</span>
+                <div class="aq-pill-group" id="aq-archetype-filters">
+                  <button class="aq-pill aq-pill--active" data-archetype="">All</button>
+                  <button class="aq-pill" data-archetype="ai_platform">AI Platform</button>
+                  <button class="aq-pill" data-archetype="agentic">Agentic</button>
+                  <button class="aq-pill" data-archetype="ai_pm">AI PM</button>
+                  <button class="aq-pill" data-archetype="ai_architect">Architect</button>
+                  <button class="aq-pill" data-archetype="ai_forward_deployed">Forward Deployed</button>
+                  <button class="aq-pill" data-archetype="ai_transformation">Transformation</button>
+                  <button class="aq-pill" data-archetype="general">General</button>
+                </div>
+              </div>
+              <div class="aq-filter-row aq-filter-row--right">
+                <label class="aq-filter-label" for="aq-min-score">Min score</label>
+                <input id="aq-min-score" type="number" class="aq-score-input" min="0" max="100" value="0" step="5" />
+                <button class="aq-refresh-btn" id="aq-refresh-btn" title="Refresh queue">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <!-- Queue table -->
             <div class="shell-card">
-              <div class="placeholder-section">
-                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
-                <h3 class="placeholder-title">Apply Queue</h3>
-                <p class="placeholder-text">Queue and track job applications you plan to submit. Coming soon.</p>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Score</th>
+                      <th>Archetype</th>
+                      <th>Company</th>
+                      <th>Role</th>
+                      <th>Date</th>
+                      <th>ATS</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="aq-table-body">
+                    <tr><td colspan="7" class="aq-empty-row">Loading queue&hellip;</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Answer bank modal -->
+            <div class="aq-modal-overlay" id="aq-modal-overlay">
+              <div class="aq-modal">
+                <div class="aq-modal-header">
+                  <div>
+                    <h3 class="aq-modal-title">Answer Bank</h3>
+                    <p class="aq-modal-sub">Pre-written answers for application forms</p>
+                  </div>
+                  <button class="aq-modal-close" id="aq-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="aq-modal-body" id="aq-modal-body">
+                  <div id="aq-answers-list"></div>
+                  <div class="aq-add-answer">
+                    <h4 class="aq-add-title">Add / update an answer</h4>
+                    <select id="aq-new-category" class="aq-select">
+                      <option value="">Select category&hellip;</option>
+                      <option value="work_authorization">Work Authorization</option>
+                      <option value="salary">Salary Expectations</option>
+                      <option value="availability">Availability / Start Date</option>
+                      <option value="relocation">Relocation</option>
+                      <option value="linkedin">LinkedIn URL</option>
+                      <option value="github">GitHub / Portfolio</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <input id="aq-new-question" class="aq-text-input" type="text" placeholder="Question text (shown as label)" />
+                    <textarea id="aq-new-answer" class="aq-textarea" rows="3" placeholder="Your answer&hellip;"></textarea>
+                    <button id="aq-save-answer-btn" class="aq-btn aq-btn--primary">Save Answer</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -382,6 +457,14 @@
                     <div class="studio-metric-card">
                       <span class="studio-metric-label">Language</span>
                       <strong id="studio-analysis-language">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">Archetype</span>
+                      <strong id="studio-analysis-archetype">-</strong>
+                    </div>
+                    <div class="studio-metric-card">
+                      <span class="studio-metric-label">ATS Platform</span>
+                      <strong id="studio-analysis-ats-vendor">-</strong>
                     </div>
                     <div class="studio-metric-card">
                       <span class="studio-metric-label">Initial Score</span>
@@ -563,6 +646,7 @@
     <script src="/static/utils.js"></script>
     <script src="/static/dashboard-shell.js"></script>
     <script src="/static/tailoring-studio.js"></script>
+    <script src="/static/apply-queue.js" defer></script>
     <!-- Future agent scripts — will load when built -->
     <script src="/static/market-intel.js" defer></script>
     <script src="/static/profile-intelligence-data.js" defer></script>

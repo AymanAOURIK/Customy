@@ -15,7 +15,11 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from app.analyzer import analyze_jd, build_updated_resume_keywords
 from app.db import (
+    delete_answer,
+    get_analytics,
+    get_answer_bank,
     get_application,
+    get_apply_queue,
     get_daily_stats,
     get_funnel_stats,
     get_quick_stats,
@@ -25,6 +29,7 @@ from app.db import (
     refresh_daily_stats,
     set_duplicate_flag,
     update_status,
+    upsert_answer,
 )
 from app.generator import PackGenerationError, generate_pack
 from app.latex import compile_pdf, render_tex
@@ -265,6 +270,15 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 if parsed.path == "/api/applications":
                     self._handle_applications(parsed.query)
                     return
+                if parsed.path == "/api/apply-queue":
+                    self._handle_apply_queue(parsed.query)
+                    return
+                if parsed.path == "/api/analytics":
+                    self._handle_analytics()
+                    return
+                if parsed.path == "/api/answer-bank":
+                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
+                    return
                 self.send_error(HTTPStatus.NOT_FOUND)
             except ValueError as exc:
                 if parsed.path.startswith("/api/"):
@@ -293,6 +307,76 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 except Exception as exc:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
+            if parsed.path == "/api/answer-bank":
+                try:
+                    payload = _read_json(self)
+                    question_key = str(payload.get("question_key") or "").strip()
+                    answer_text = str(payload.get("answer_text") or "").strip()
+                    if not question_key or not answer_text:
+                        raise ValueError("Fields 'question_key' and 'answer_text' are required.")
+                    upsert_answer(
+                        db_path,
+                        question_key=question_key,
+                        question_text=str(payload.get("question_text") or question_key).strip(),
+                        answer_text=answer_text,
+                        category=str(payload.get("category") or "").strip(),
+                        language=str(payload.get("language") or "en").strip(),
+                        source="manual",
+                    )
+                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            if parsed.path == "/api/answer-question":
+                try:
+                    payload = _read_json(self)
+                    question = str(payload.get("question") or "").strip().lower()
+                    if not question:
+                        raise ValueError("Field 'question' is required.")
+                    answers = get_answer_bank(db_path)
+                    _CATEGORY_KEYWORDS: dict[str, list[str]] = {
+                        "work_authorization": ["authorized", "work authorization", "visa", "sponsorship", "eligible to work", "right to work", "work permit"],
+                        "salary": ["salary", "compensation", "pay", "rate", "expectations", "package", "remuneration"],
+                        "availability": ["start date", "available", "notice period", "when can you start", "earliest start"],
+                        "relocation": ["relocate", "relocation", "move to", "willing to move"],
+                        "linkedin": ["linkedin", "linkedin url", "professional profile"],
+                        "github": ["github", "portfolio", "code samples", "github url"],
+                    }
+                    matched_category = next(
+                        (cat for cat, keywords in _CATEGORY_KEYWORDS.items() if any(kw in question for kw in keywords)),
+                        None,
+                    )
+                    matched_answer = next(
+                        (a for a in answers if a.get("category") == matched_category),
+                        None,
+                    ) if matched_category else None
+                    self._json(HTTPStatus.OK, {
+                        "matched": matched_answer is not None,
+                        "category": matched_category,
+                        "answer": matched_answer,
+                        "hint": None if matched_answer else (
+                            f"No answer saved for category '{matched_category}'. Add it in the Answer Bank."
+                            if matched_category else "Question did not match any known category."
+                        ),
+                    })
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            if parsed.path.startswith("/api/answer-bank/") and parsed.path.endswith("/delete"):
+                try:
+                    key = unquote(parsed.path.removeprefix("/api/answer-bank/").removesuffix("/delete"))
+                    delete_answer(db_path, key)
+                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
             if parsed.path != "/api/generate":
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
@@ -309,6 +393,24 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     _candidate_keywords(candidate_context),
                     application_url=application_url,
                 )
+                min_score_for_pdf = float(cfg.get("generation", {}).get("min_score_for_pdf", 0))
+                if min_score_for_pdf > 0 and initial_analysis["score"] < min_score_for_pdf:
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "score_gate": True,
+                            "score": initial_analysis["score"],
+                            "min_score": min_score_for_pdf,
+                            "archetype": initial_analysis.get("archetype"),
+                            "ats_vendor": initial_analysis.get("ats_vendor"),
+                            "message": (
+                                f"Score {initial_analysis['score']} is below the configured minimum "
+                                f"of {min_score_for_pdf}. Generation skipped."
+                            ),
+                            "analysis": initial_analysis,
+                        },
+                    )
+                    return
                 try:
                     pack, usage_summary, detected_company = generate_pack(
                         jd_text=jd_text,
@@ -391,6 +493,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                             initial_score=float(initial_analysis.get("score") or 0.0),
                             updated_score=float(updated_analysis.get("score") or 0.0),
                             usage_summary=usage_summary,
+                            archetype=initial_analysis.get("archetype"),
                         )
                         break
                     except sqlite3.IntegrityError as exc:
@@ -420,6 +523,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         "score": updated_analysis.get("score"),
                         "initial_score": initial_analysis.get("score"),
                         "updated_score": updated_analysis.get("score"),
+                        "archetype": initial_analysis.get("archetype"),
+                        "ats_vendor": initial_analysis.get("ats_vendor"),
+                        "exact_phrases": initial_analysis.get("exact_phrases", []),
                         "tokens_used": tokens_used,
                         "usage": usage_summary,
                         "analysis": initial_analysis,
@@ -471,6 +577,21 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+
+        def _handle_apply_queue(self, query_string: str) -> None:
+            from urllib.parse import parse_qs
+            params = parse_qs(query_string or "")
+            min_score = float((params.get("min_score") or ["0"])[0])
+            rows = get_apply_queue(db_path, min_score=min_score)
+            apps = []
+            for row in rows:
+                serialized = _serialize_application(row)
+                serialized["archetype"] = row.get("role_archetype") or "general"
+                apps.append(serialized)
+            self._json(HTTPStatus.OK, {"applications": apps, "count": len(apps)})
+
+        def _handle_analytics(self) -> None:
+            self._json(HTTPStatus.OK, get_analytics(db_path))
 
         def _handle_stats(self) -> None:
             refresh_daily_stats(db_path)

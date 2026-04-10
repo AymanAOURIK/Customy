@@ -195,14 +195,30 @@
     });
   }
 
+  var ARCHETYPE_LABELS = {
+    ai_platform: "AI Platform / LLMOps",
+    agentic: "Agentic / Automation",
+    ai_pm: "Technical AI PM",
+    ai_architect: "AI Solutions Architect",
+    ai_forward_deployed: "AI Forward Deployed",
+    ai_transformation: "AI Transformation",
+    general: "General",
+  };
+
   function renderAnalysis(data) {
     var usage = data.usage || {};
+    var analysis = data.analysis || {};
     document.getElementById("studio-analysis-company").textContent =
       data.company || "-";
     document.getElementById("studio-analysis-role").textContent =
       data.role || "-";
     document.getElementById("studio-analysis-language").textContent =
-      (data.analysis && data.analysis.language) || "-";
+      analysis.language || "-";
+    var archetypeKey = data.archetype || analysis.archetype || "general";
+    document.getElementById("studio-analysis-archetype").textContent =
+      ARCHETYPE_LABELS[archetypeKey] || archetypeKey;
+    document.getElementById("studio-analysis-ats-vendor").textContent =
+      (data.ats_vendor || analysis.ats_vendor || "-");
     document.getElementById("studio-analysis-initial-score").textContent =
       formatScore(data.initial_score);
     document.getElementById("studio-analysis-updated-score").textContent =

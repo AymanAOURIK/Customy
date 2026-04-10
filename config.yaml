@@ -11,3 +11,7 @@ paths:
   applications_dir: "/mnt/c/Users/LENOVO/desktop/Customy output job applications"
   db_path: "data/customy.db"
   prompts_dir: "prompts"
+
+generation:
+  min_score_for_pdf: 0      # skip LaTeX + LLM below this score (0 = disabled)
+  min_score_for_queue: 0    # minimum score to appear in Apply Queue (0 = show all)
