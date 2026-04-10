@@ -319,11 +319,12 @@
                       <th>Role</th>
                       <th>Date</th>
                       <th>ATS</th>
+                      <th>Fill</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="aq-table-body">
-                    <tr><td colspan="7" class="aq-empty-row">Loading queue&hellip;</td></tr>
+                    <tr><td colspan="8" class="aq-empty-row">Loading queue&hellip;</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -356,6 +357,29 @@
                     <input id="aq-new-question" class="aq-text-input" type="text" placeholder="Question text (shown as label)" />
                     <textarea id="aq-new-answer" class="aq-textarea" rows="3" placeholder="Your answer&hellip;"></textarea>
                     <button id="aq-save-answer-btn" class="aq-btn aq-btn--primary">Save Answer</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto-fill snippet modal -->
+            <div class="aq-modal-overlay" id="aq-fill-overlay">
+              <div class="aq-modal aq-modal--wide">
+                <div class="aq-modal-header">
+                  <div>
+                    <h3 class="aq-modal-title">Auto-fill Snippet</h3>
+                    <p class="aq-modal-sub">Open the job form → F12 → Console → paste this snippet → review every field → submit</p>
+                  </div>
+                  <button class="aq-modal-close" id="aq-fill-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="aq-modal-body" id="aq-fill-body">
+                  <div id="aq-fill-field-plan"></div>
+                  <div class="aq-fill-snippet-wrap">
+                    <div class="aq-fill-snippet-toolbar">
+                      <span class="aq-fill-vendor-label" id="aq-fill-vendor-label"></span>
+                      <button class="aq-copy-btn" id="aq-fill-copy-btn">Copy snippet</button>
+                    </div>
+                    <pre class="aq-fill-snippet-pre" id="aq-fill-snippet-pre"></pre>
                   </div>
                 </div>
               </div>

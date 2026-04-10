@@ -18,6 +18,7 @@ from app.db import (
     delete_answer,
     get_analytics,
     get_answer_bank,
+    get_answer_by_key,
     get_application,
     get_apply_queue,
     get_daily_stats,
@@ -33,6 +34,7 @@ from app.db import (
 )
 from app.generator import PackGenerationError, generate_pack
 from app.latex import compile_pdf, render_tex
+from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
 from app.targeting import candidate_keywords_from_profile
@@ -373,6 +375,58 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     key = unquote(parsed.path.removeprefix("/api/answer-bank/").removesuffix("/delete"))
                     delete_answer(db_path, key)
                     self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            if parsed.path == "/api/apply-assist":
+                try:
+                    payload = _read_json(self)
+                    app_id = payload.get("app_id")
+                    market = str(payload.get("market") or "").strip().lower() or None
+                    use_playwright = bool(payload.get("use_playwright", False))
+
+                    # Resolve ATS vendor and cover letter from the stored application
+                    ats_vendor: str | None = None
+                    cover_letter_text: str | None = None
+                    application_url_for_pw: str | None = None
+                    if app_id is not None:
+                        row = get_application(db_path, int(app_id))
+                        if not row:
+                            raise ValueError(f"Application {app_id} not found.")
+                        ats_vendor = row.get("role_archetype")  # archetype stored, vendor comes from analysis
+                        # Try to read cover letter text from disk
+                        outputs_path = row.get("outputs_path") or ""
+                        if outputs_path:
+                            cl_matches = sorted(Path(outputs_path).glob("*Cover_letter.txt"))
+                            if cl_matches:
+                                try:
+                                    cover_letter_text = cl_matches[0].read_text(encoding="utf-8")
+                                except Exception:
+                                    pass
+                        application_url_for_pw = row.get("job_application_url")
+                        # Re-derive ats_vendor from application URL if stored
+                        if application_url_for_pw:
+                            from app.analyzer import _detect_ats_vendor  # type: ignore[attr-defined]
+                            ats_vendor = _detect_ats_vendor(application_url_for_pw)
+
+                    fill_plan = build_fill_plan(
+                        db_path=db_path,
+                        ats_vendor=ats_vendor,
+                        market=market,
+                        cover_letter_text=cover_letter_text,
+                    )
+
+                    playwright_result: dict | None = None
+                    if use_playwright and application_url_for_pw:
+                        playwright_result = run_playwright_fill(application_url_for_pw, fill_plan)
+
+                    self._json(HTTPStatus.OK, {
+                        "fill_plan": fill_plan,
+                        "playwright": playwright_result,
+                    })
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 except Exception as exc:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
