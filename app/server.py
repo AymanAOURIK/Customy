@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -28,14 +29,15 @@ from app.db import (
 from app.generator import PackGenerationError, generate_pack
 from app.latex import compile_pdf, render_tex
 from app.profile import build_candidate_context
-from app.storage import COVER_LETTER_FILENAME, make_slug, set_applications_dir, write_pack
+from app.storage import make_slug, set_applications_dir, write_pack
 from app.targeting import candidate_keywords_from_profile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = PROJECT_ROOT / "app" / "templates"
 STATIC_DIR = PROJECT_ROOT / "app" / "static"
 ALLOWED_OUTPUTS = {"resume", "cover_letter", "linkedin_msg", "email_draft"}
-RESUME_PDF_FILENAME = "Ayman_Aourik_Resume.pdf"
+
+_log = logging.getLogger(__name__)
 
 
 def _artifact_url(slug: str, filename: str) -> str:
@@ -144,8 +146,10 @@ def _serialize_application(row: dict) -> dict:
         outputs["resume_pdf"] = _artifact_url(slug, Path(row["resume_pdf_path"]).name)
     if row.get("resume_tex_path"):
         outputs["resume_tex"] = _artifact_url(slug, Path(row["resume_tex_path"]).name)
-    if row.get("cover_letter"):
-        outputs["cover_letter"] = _artifact_url(slug, COVER_LETTER_FILENAME)
+    if row.get("cover_letter") and row.get("outputs_path"):
+        _cl_matches = sorted(Path(row["outputs_path"]).glob("*Cover_letter.txt"))
+        if _cl_matches:
+            outputs["cover_letter"] = _artifact_url(slug, _cl_matches[0].name)
     if row.get("linkedin_msg"):
         outputs["linkedin_message"] = _artifact_url(slug, "linkedin_message.md")
     if row.get("email_draft"):
@@ -234,7 +238,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args) -> None:
-            return
+            _log.info("%s %s", self.command if hasattr(self, "command") else "-", format % args)
 
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
@@ -338,6 +342,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 last_slug_error = ""
                 for _ in range(8):
                     slug = make_slug(company, role, db_path=db_path)
+                    _cand_name = candidate_context.get("personal", {}).get("name") or "Candidate"
+                    _pdf_filename = re.sub(r"\s+", "_", _cand_name.strip()) + "_Resume.pdf"
                     try:
                         files = write_pack(
                             applications_dir=str(applications_dir),
@@ -347,6 +353,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                             pack=pack,
                             tex_string=tex_string,
                             requested_outputs=requested_outputs,
+                            candidate_name=_cand_name,
                             usage_summary=usage_summary,
                             initial_analysis=initial_analysis,
                             updated_analysis=updated_analysis,
@@ -358,7 +365,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     pdf_path = compile_pdf(
                         files["resume_tex"],
                         files["output_dir"],
-                        output_filename=RESUME_PDF_FILENAME,
+                        output_filename=_pdf_filename,
                     )
                     if pdf_path:
                         files["resume_pdf"] = pdf_path
@@ -508,7 +515,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             if applications_dir not in path.parents or not path.is_file():
                 raise ValueError("Artifact not found.")
             mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            attachment_filename = path.name if path.name == COVER_LETTER_FILENAME else None
+            attachment_filename = path.name if path.name.endswith("_Cover_letter.txt") else None
             self._serve_file(path, mime, attachment_filename=attachment_filename)
 
         def _serve_file(self, path: Path, content_type: str, attachment_filename: str | None = None) -> None:

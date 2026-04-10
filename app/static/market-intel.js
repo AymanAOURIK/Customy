@@ -409,99 +409,11 @@
     );
   }
 
-  /* ── Styles ────────────────────────────────────────────── */
-
-  var STYLES = [
-    /* spacing between cards */
-    '.mi-card { margin-bottom: 20px; }',
-    '.mi-card:last-child { margin-bottom: 0; }',
-
-    /* badges */
-    '.mi-badge { display:inline-flex; align-items:center; padding:2px 9px; border-radius:5px; font-size:0.7rem; font-weight:600; white-space:nowrap; }',
-    '.mi-badge-verified   { background:rgba(5,150,105,0.1);  color:#059669; }',
-    '.mi-badge-hypothesis { background:rgba(217,119,6,0.1);  color:#B45309; }',
-    '.mi-badge-research   { background:rgba(37,99,235,0.1);  color:#2563EB; }',
-
-    /* body text */
-    '.mi-body-text { font-size:0.9rem; color:#374151; line-height:1.65; margin:0 0 12px; }',
-
-    /* note line */
-    '.mi-note { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.78rem; color:#6B7280; margin:0 0 14px; }',
-
-    /* product tags */
-    '.mi-tags { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }',
-    '.mi-tag  { padding:4px 12px; border-radius:6px; background:#F3F4F6; color:#374151; font-size:0.78rem; font-weight:500; border:1px solid #E5E7EB; }',
-
-    /* inner cards (sub-cards within a shell-card) */
-    '.mi-inner-card   { padding:14px 16px; background:#F9FAFB; border:1px solid #F0F1F3; border-radius:10px; }',
-    '.mi-inner-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:7px; }',
-    '.mi-inner-title  { font-size:0.85rem; font-weight:600; color:#111827; line-height:1.3; }',
-    '.mi-inner-body   { font-size:0.78rem; color:#6B7280; line-height:1.5; margin:0; }',
-
-    /* grids */
-    '.mi-grid-2    { display:grid; grid-template-columns:1fr 1fr; gap:12px; }',
-    '.mi-grid-3    { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }',
-    '.mi-grid-4    { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }',
-    '.mi-grid-auto { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }',
-
-    /* category sub-card */
-    '.mi-cat-title { font-size:0.85rem; font-weight:600; color:#111827; margin-bottom:3px; }',
-    '.mi-cat-sub   { font-size:0.72rem; color:#9CA3AF; margin-bottom:9px; }',
-    '.mi-cat-label { font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#9CA3AF; margin:8px 0 3px; }',
-    '.mi-cat-row   { font-size:0.78rem; padding:2px 0; line-height:1.4; }',
-    '.mi-has       { color:#059669; }',
-    '.mi-gap       { color:#DC2626; }',
-
-    /* matrix */
-    '.mi-matrix-wrap { overflow-x:auto; }',
-    '.mi-matrix { width:100%; border-collapse:collapse; font-size:0.85rem; }',
-    '.mi-matrix th { padding:10px 14px; font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#6B7280; font-weight:600; border-bottom:1px solid #E5E7EB; text-align:left; white-space:nowrap; background:#F9FAFB; }',
-    '.mi-matrix td { padding:11px 14px; border-bottom:1px solid #F3F4F6; color:#374151; vertical-align:middle; }',
-    '.mi-matrix tr:last-child td { border-bottom:none; }',
-    '.mi-m-customy { background:rgba(15,118,110,0.05); font-weight:600; color:#0F766E; }',
-    '.mi-check { color:#059669; font-weight:700; }',
-    '.mi-cross { color:#D1D5DB; }',
-
-    /* positioning */
-    '.mi-pos-headline { font-size:1.05rem; font-weight:700; color:#0F766E; line-height:1.45; margin-bottom:14px; padding:14px 18px; background:rgba(15,118,110,0.06); border-left:3px solid #0F766E; border-radius:0 8px 8px 0; }',
-    '.mi-diff-label   { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#9CA3AF; margin-bottom:10px; }',
-    '.mi-diff-list    { list-style:none; padding:0; margin:0; display:grid; gap:7px; }',
-    '.mi-diff-item    { font-size:0.85rem; color:#374151; padding:9px 14px; background:#F9FAFB; border:1px solid #F0F1F3; border-radius:8px; }',
-    '.mi-diff-item::before { content:"→ "; color:#0F766E; font-weight:700; }',
-
-    /* objection q */
-    '.mi-obj-q { font-size:0.85rem; font-weight:600; color:#374151; font-style:italic; margin-bottom:8px; }',
-
-    /* research board */
-    '.mi-rb-grid      { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }',
-    '.mi-rb-col       { background:#F9FAFB; border:1px solid #F0F1F3; border-radius:10px; padding:14px; }',
-    '.mi-rb-col-head  { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #E5E7EB; }',
-    '.mi-rb-count     { font-size:0.72rem; font-weight:600; color:#9CA3AF; background:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px; padding:1px 8px; }',
-    '.mi-rb-item      { font-size:0.78rem; line-height:1.4; padding:7px 10px; border-radius:6px; margin-bottom:5px; }',
-    '.mi-rb-item:last-child { margin-bottom:0; }',
-    '.mi-rb-verified   { background:rgba(5,150,105,0.06);  color:#065F46; border:1px solid rgba(5,150,105,0.12); }',
-    '.mi-rb-hypothesis { background:rgba(217,119,6,0.06);  color:#78350F; border:1px solid rgba(217,119,6,0.12); }',
-    '.mi-rb-research   { background:rgba(37,99,235,0.06);  color:#1E3A8A; border:1px solid rgba(37,99,235,0.12); }',
-
-    /* responsive */
-    '@media(max-width:1024px){',
-    '  .mi-grid-4,.mi-rb-grid { grid-template-columns:repeat(2,1fr); }',
-    '}',
-    '@media(max-width:640px){',
-    '  .mi-grid-2,.mi-grid-3,.mi-grid-4,.mi-rb-grid { grid-template-columns:1fr; }',
-    '}',
-  ].join('\n');
-
   /* ── Mount ─────────────────────────────────────────────── */
 
   function mount() {
     var container = document.getElementById('market-intel-section');
     if (!container) return;
-
-    /* Inject styles once */
-    var styleEl = document.createElement('style');
-    styleEl.textContent = STYLES;
-    document.head.appendChild(styleEl);
 
     /* Build the full Market Intel page */
     var html =

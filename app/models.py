@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
-def _clean_text(value: object) -> str:
-    return " ".join(str(value or "").strip().split())
+from app.text_utils import clean_text as _clean_text
 
 
 def _clean_list(value: object) -> list[str]:

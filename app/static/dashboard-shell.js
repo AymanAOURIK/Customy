@@ -87,25 +87,15 @@
     return "shell-score-red";
   }
 
-  function formatUsd(value) {
-    var n = Number(value);
-    if (!Number.isFinite(n)) return "-";
-    if (n === 0) return "$0.00";
-    return "$" + n.toFixed(n < 0.01 ? 6 : 4);
-  }
-
-  function formatScore(value) {
-    if (value === null || value === undefined || value === "") return "-";
-    var n = Number(value);
-    return Number.isFinite(n) ? n.toFixed(1) : "-";
-  }
+  var formatUsd = CUtils.formatUsd;
+  var formatScore = CUtils.formatScore;
 
   function scoreBadge(score) {
     if (score === null || score === undefined || score === "")
-      return '<span style="color:#9CA3AF">-</span>';
+      return '<span class="shell-dash">-</span>';
     var n = Number(score);
     if (!Number.isFinite(n))
-      return '<span style="color:#9CA3AF">-</span>';
+      return '<span class="shell-dash">-</span>';
     return (
       '<span class="shell-score-badge ' +
       scoreClass(n) +
@@ -281,7 +271,7 @@
   function jobApplicationLink(url) {
     if (!url) {
       var s = document.createElement("span");
-      s.style.color = "#9CA3AF";
+      s.className = "shell-dash";
       s.textContent = "-";
       return s;
     }
@@ -445,7 +435,7 @@
         y1: h - m.bottom,
         x2: w - m.right,
         y2: h - m.bottom,
-        stroke: "#D1D5DB",
+        style: "stroke: var(--shell-chart-axis);",
       })
     );
     chart.appendChild(
@@ -454,7 +444,7 @@
         y1: m.top,
         x2: m.left,
         y2: h - m.bottom,
-        stroke: "#D1D5DB",
+        style: "stroke: var(--shell-chart-axis);",
       })
     );
 
@@ -464,7 +454,7 @@
       var t = svgNode("text", {
         x: 8,
         y: y + 4,
-        fill: "#9CA3AF",
+        style: "fill: var(--shell-chart-label);",
         "font-size": "12",
       });
       t.textContent = String(tick);
@@ -475,7 +465,7 @@
           y1: y,
           x2: w - m.right,
           y2: y,
-          stroke: "#F3F4F6",
+          style: "stroke: var(--shell-chart-grid);",
         })
       );
     });
@@ -493,7 +483,7 @@
         width: Math.max(bw, 4),
         height: bh,
         rx: 4,
-        fill: "#0F766E",
+        style: "fill: var(--shell-accent);",
       });
       rect.addEventListener("mousemove", function (e) {
         tooltip.classList.add("visible");
@@ -511,7 +501,7 @@
         var label = svgNode("text", {
           x: x + Math.max(bw, 4) / 2,
           y: h - 12,
-          fill: "#9CA3AF",
+          style: "fill: var(--shell-chart-label);",
           "font-size": "11",
           "text-anchor": "middle",
         });

@@ -22,3 +22,9 @@ nano .env
 
 # 8. Run app
 python main.py
+
+# 9. Push Code to github
+git status --short --branch
+git add .
+git commit -m "Describe what changed"
+git push origin main

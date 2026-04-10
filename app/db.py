@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from statistics import mean
 
 VALID_STATUSES = {"generated", "applied", "interviewing", "offer", "rejected", "ghosted"}
 APPLICATION_EXTRA_COLUMNS = {
@@ -324,26 +322,6 @@ def set_duplicate_flag(db_path: str, app_id: int, is_duplicate: bool, detail: st
         )
 
 
-def add_note(db_path, app_id: int, note: str) -> None:
-    """Appends to notes column and inserts an event row with event_type='note'."""
-
-    note_text = str(note).strip()
-    if not note_text:
-        return
-    stamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    with _connect(db_path) as conn:
-        row = conn.execute("SELECT notes FROM applications WHERE id = ?", (app_id,)).fetchone()
-        if row is None:
-            raise ValueError(f"Application {app_id} does not exist.")
-        existing = row["notes"] or ""
-        combined = f"{existing}\n[{stamp}] {note_text}".strip()
-        conn.execute("UPDATE applications SET notes = ? WHERE id = ?", (combined, app_id))
-        conn.execute(
-            "INSERT INTO events (application_id, event_type, detail) VALUES (?, 'note', ?)",
-            (app_id, note_text),
-        )
-
-
 def get_funnel_stats(db_path) -> dict:
     """Returns {generated: N, applied: N, interviewing: N, offer: N, rejected: N, ghosted: N}."""
 
@@ -360,19 +338,6 @@ def get_funnel_stats(db_path) -> dict:
     for row in rows:
         stats[row["status"]] = int(row["count"])
     return stats
-
-
-def get_recent_applications(db_path, days: int = 30) -> list[dict]:
-    with _connect(db_path) as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM applications
-            WHERE datetime(created_at) >= datetime('now', ?)
-            ORDER BY datetime(created_at) DESC, id DESC
-            """,
-            (f"-{int(days)} days",),
-        ).fetchall()
-    return [dict(row) for row in rows]
 
 
 def refresh_daily_stats(db_path) -> None:
@@ -512,123 +477,3 @@ def get_quick_stats(db_path) -> dict:
     }
 
 
-def _read_generated_payload(outputs_path: object) -> dict:
-    path_text = str(outputs_path or "").strip()
-    if not path_text:
-        return {}
-    generated_path = Path(path_text) / "generated.json"
-    if not generated_path.is_file():
-        return {}
-    try:
-        return json.loads(generated_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def list_generation_analyses(db_path: str, limit: int | None = None) -> list[dict]:
-    with _connect(db_path) as conn:
-        if limit is None:
-            rows = conn.execute(
-                """
-                SELECT * FROM applications
-                ORDER BY datetime(created_at) DESC, id DESC
-                """
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT * FROM applications
-                ORDER BY datetime(created_at) DESC, id DESC
-                LIMIT ?
-                """,
-                (int(limit),),
-            ).fetchall()
-
-    analyses = []
-    for row in rows:
-        row_dict = dict(row)
-        payload = _read_generated_payload(row_dict.get("outputs_path"))
-        if not payload:
-            continue
-
-        initial_analysis = payload.get("initial_analysis") or {}
-        updated_analysis = payload.get("updated_analysis") or {}
-        pack = payload.get("pack") or {}
-        initial_score = row_dict.get("initial_score")
-        updated_score = row_dict.get("updated_score")
-        delta_score = None
-        if initial_score is not None and updated_score is not None:
-            delta_score = round(float(updated_score) - float(initial_score), 1)
-
-        matched_before = list(initial_analysis.get("matched_keywords") or [])
-        matched_after = list(updated_analysis.get("matched_keywords") or [])
-        missing_before = list(initial_analysis.get("missing_candidate_keywords") or [])
-        missing_after = list(updated_analysis.get("missing_candidate_keywords") or [])
-        keyword_signals = list(initial_analysis.get("keyword_signals") or [])
-
-        analyses.append(
-            {
-                "id": row_dict.get("id"),
-                "created_at": row_dict.get("created_at"),
-                "slug": row_dict.get("slug"),
-                "company": row_dict.get("company"),
-                "role": row_dict.get("role"),
-                "jd_language": row_dict.get("jd_language"),
-                "outputs_path": row_dict.get("outputs_path"),
-                "initial_score": initial_score,
-                "updated_score": updated_score,
-                "delta_score": delta_score,
-                "keyword_signals": keyword_signals,
-                "top_requirements": list(initial_analysis.get("top_requirements") or []),
-                "matched_keywords_before": matched_before,
-                "matched_keywords_after": matched_after,
-                "gained_keywords": [item for item in matched_after if item.lower() not in {value.lower() for value in matched_before}],
-                "missing_keywords_before": missing_before,
-                "missing_keywords_after": missing_after,
-                "tailored_title": str(pack.get("tailored_title") or ""),
-                "tailored_summary": str(pack.get("tailored_summary") or ""),
-                "focus_areas": list(pack.get("focus_areas") or []),
-                "tailored_skills": dict(pack.get("tailored_skills") or {}),
-                "profile_update_hints": list(pack.get("profile_update_hints") or []),
-            }
-        )
-    return analyses
-
-
-def summarize_generation_analyses(db_path: str, limit: int | None = None) -> dict:
-    analyses = list_generation_analyses(db_path, limit=limit)
-    scored_rows = [row for row in analyses if row["delta_score"] is not None]
-    if not scored_rows:
-        return {
-            "total_rows": len(analyses),
-            "scored_rows": 0,
-            "average_initial_score": None,
-            "average_updated_score": None,
-            "average_delta_score": None,
-            "positive_delta_rows": 0,
-            "delta_le_1_count": 0,
-            "delta_le_3_count": 0,
-            "persistent_missing_keywords": [],
-            "gained_keywords": [],
-        }
-
-    persistent_missing = Counter()
-    gained = Counter()
-    for row in scored_rows:
-        for keyword in row["missing_keywords_after"]:
-            persistent_missing[keyword] += 1
-        for keyword in row["gained_keywords"]:
-            gained[keyword] += 1
-
-    return {
-        "total_rows": len(analyses),
-        "scored_rows": len(scored_rows),
-        "average_initial_score": round(mean(float(row["initial_score"]) for row in scored_rows), 1),
-        "average_updated_score": round(mean(float(row["updated_score"]) for row in scored_rows), 1),
-        "average_delta_score": round(mean(float(row["delta_score"]) for row in scored_rows), 1),
-        "positive_delta_rows": sum(1 for row in scored_rows if float(row["delta_score"]) > 0.0),
-        "delta_le_1_count": sum(1 for row in scored_rows if float(row["delta_score"]) <= 1.0),
-        "delta_le_3_count": sum(1 for row in scored_rows if float(row["delta_score"]) <= 3.0),
-        "persistent_missing_keywords": persistent_missing.most_common(10),
-        "gained_keywords": gained.most_common(10),
-    }

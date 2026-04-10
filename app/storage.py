@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.db import application_slug_exists
 from app.models import ApplicationPack
 
 _APPLICATIONS_DIR: Path | None = None
-COVER_LETTER_FILENAME = "Ayman_Aourik_Cover_letter.txt"
+
+
+def _name_to_filename(name: str, suffix: str) -> str:
+    """Turn 'Ayman Aourik' into 'Ayman_Aourik_<suffix>'."""
+    slug = re.sub(r"\s+", "_", name.strip()) or "Candidate"
+    return f"{slug}_{suffix}"
 
 
 def set_applications_dir(path: str) -> None:
@@ -55,6 +60,7 @@ def write_pack(
     pack: ApplicationPack,
     tex_string: str,
     requested_outputs: list[str],
+    candidate_name: str = "Candidate",
     usage_summary: dict | None = None,
     initial_analysis: dict | None = None,
     updated_analysis: dict | None = None,
@@ -62,7 +68,7 @@ def write_pack(
     """
     Creates <configured applications_dir>/<slug>/
     Always writes: job_description.md, resume.tex, generated.json
-    Conditionally writes: Ayman_Aourik_Cover_letter.txt, linkedin_message.md, email_draft.md
+    Conditionally writes: <Name>_Cover_letter.txt, linkedin_message.md, email_draft.md
     Returns dict of all written absolute file paths.
     """
 
@@ -82,7 +88,7 @@ def write_pack(
     (output_dir / "generated.json").write_text(
         json.dumps(
             {
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "requested_outputs": requested_outputs,
                 "job_application_url": application_url or None,
                 "scores": {
@@ -102,9 +108,11 @@ def write_pack(
     )
 
     if "cover_letter" in requested_outputs and pack.cover_letter:
-        path = output_dir / COVER_LETTER_FILENAME
+        cl_filename = _name_to_filename(candidate_name, "Cover_letter.txt")
+        path = output_dir / cl_filename
         path.write_text(pack.cover_letter.strip() + "\n", encoding="utf-8")
         files["cover_letter"] = str(path)
+        files["cover_letter_filename"] = cl_filename
 
     if "linkedin_msg" in requested_outputs and pack.linkedin_message:
         path = output_dir / "linkedin_message.md"

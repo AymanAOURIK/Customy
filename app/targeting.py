@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from app.text_utils import clean_text as _clean_text, term_matches_text as _term_matches_text
+
 REALISTIC_ROLE_TARGETS = [
     "AI Lead",
     "Head of AI",
@@ -217,10 +219,6 @@ _LOCALIZED_SKILL_TERMS = {
 }
 
 
-def _clean_text(value: object) -> str:
-    return " ".join(str(value or "").strip().split())
-
-
 def _normalize_skill_key(value: object) -> str:
     return _clean_text(value).lower()
 
@@ -241,18 +239,6 @@ def _iter_profile_strings(value: object) -> list[str]:
         return items
     cleaned = _clean_text(value)
     return [cleaned] if cleaned else []
-
-
-def _term_matches_text(text: str, term: str) -> bool:
-    cleaned_term = _clean_text(term)
-    if not cleaned_term:
-        return False
-    escaped = re.escape(cleaned_term)
-    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ./+_-]*[A-Za-z0-9]", cleaned_term):
-        pattern = rf"(?<!\w){escaped}(?!\w)"
-    else:
-        pattern = escaped
-    return re.search(pattern, text, flags=re.IGNORECASE) is not None
 
 
 def _infer_skill_category(key: str, explicit_categories: dict[str, str]) -> str | None:

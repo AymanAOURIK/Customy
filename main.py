@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import logging
 import os
 import shutil
 import threading
@@ -16,6 +17,8 @@ from app.db import init_db
 from app.profile import build_candidate_context
 from app.server import run_server
 from config import load_config
+
+_log = logging.getLogger(__name__)
 
 
 def _open_browser(url: str) -> None:
@@ -56,14 +59,14 @@ def main() -> None:
 
     threading.Timer(1.2, _open_browser, args=(f"http://{host}:{port}",)).start()
 
-    print(f"\n  Customy running -> http://{host}:{port}")
-    print(f"  Database        -> {cfg['paths']['db_path']}")
-    print(f"  Artifacts       -> {cfg['paths']['applications_dir']}\n")
-    print(
-        "  Candidate       -> "
-        f"{candidate_context.get('personal', {}).get('name') or 'unknown'} "
-        f"({candidate_context.get('candidate_source') or 'unknown'}, "
-        f"{len(candidate_context.get('experiences', []))} experience block(s))\n"
+    _log.info("Customy running -> http://%s:%s", host, port)
+    _log.info("Database        -> %s", cfg["paths"]["db_path"])
+    _log.info("Artifacts       -> %s", cfg["paths"]["applications_dir"])
+    _log.info(
+        "Candidate       -> %s (%s, %d experience block(s))",
+        candidate_context.get("personal", {}).get("name") or "unknown",
+        candidate_context.get("candidate_source") or "unknown",
+        len(candidate_context.get("experiences", [])),
     )
 
     run_server(host, port, cfg)

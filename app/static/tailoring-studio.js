@@ -35,22 +35,9 @@
     return outputs;
   }
 
-  function formatNumber(value) {
-    var numeric = Number(value || 0);
-    return Number.isFinite(numeric) ? numeric.toLocaleString() : "-";
-  }
-
-  function formatUsd(value) {
-    var numeric = Number(value);
-    if (!Number.isFinite(numeric)) return "-";
-    return "$" + numeric.toFixed(numeric < 0.01 ? 6 : 4);
-  }
-
-  function formatScore(value) {
-    if (value === null || value === undefined || value === "") return "-";
-    var numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric.toFixed(1) : "-";
-  }
+  var formatNumber = CUtils.formatNumber;
+  var formatUsd = CUtils.formatUsd;
+  var formatScore = CUtils.formatScore;
 
   function resumePreview(pack) {
     var isFrench = (pack.resume_language || "").toLowerCase() === "fr";
@@ -196,7 +183,7 @@
       link.className = "studio-download-link";
       link.href = file.url;
       if (key === "cover_letter") {
-        link.download = filename || "Ayman_Aourik_Cover_letter.txt";
+        link.download = filename || "Cover_letter.txt";
       } else {
         link.target = "_blank";
         link.rel = "noreferrer";

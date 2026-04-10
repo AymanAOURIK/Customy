@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install:*)",
-      "Bash(python3:*)"
+      "Read(/mnt/c/Users/LENOVO/desktop/Customy output job applications/**)"
     ]
   }
 }
