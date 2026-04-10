@@ -57,6 +57,18 @@ def seed_answer_bank(db_path: str, candidate_context: dict) -> None:
     personal = candidate_context.get("personal", {})
 
     # ── Contact ───────────────────────────────────────────────────────────────
+    name = _js(personal.get("name"))
+    if name:
+        _seed("full_name", "Full name", name, "contact")
+        parts = name.strip().split()
+        if parts:
+            _seed("first_name", "First name", parts[0], "contact")
+            _seed("last_name", "Last name", " ".join(parts[1:]) if len(parts) > 1 else "", "contact")
+
+    email = _js(personal.get("email"))
+    if email:
+        _seed("email", "Email address", email, "contact")
+
     phone = _js(personal.get("phone"))
     if phone:
         _seed("phone_number", "Phone number", phone, "contact")
@@ -75,6 +87,13 @@ def seed_answer_bank(db_path: str, candidate_context: dict) -> None:
     location = _js(personal.get("location"))
     if location:
         _seed("location", "City / location", location, "location")
+
+    # Most recent employer (for "Current company" fields on ATS forms)
+    experiences = candidate_context.get("experiences", [])
+    if experiences:
+        current_company = _js(experiences[0].get("company", ""))
+        if current_company:
+            _seed("current_company", "Current company / organization", current_company, "contact")
 
     # ── Work authorization ────────────────────────────────────────────────────
     work_auth = candidate_context.get("work_authorization", {})
