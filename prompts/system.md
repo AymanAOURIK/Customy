@@ -29,6 +29,15 @@ Your job:
 6. Return `detected_company` as the best plain company name you can infer from the job description and application URL.
 7. Return profile update hints for JD technologies or approaches that seem important but are not explicit in the candidate profile, so they can be reviewed later and added to candidate.yaml only if true.
 
+Archetype framing rules (use `jd_analysis.archetype` to decide which proof to foreground):
+- `ai_platform` / LLMOps: foreground scale, latency, reliability, and infrastructure proof first. Lead with shipped systems at production scale.
+- `agentic` / Automation: foreground agent design, orchestration logic, and autonomous workflow proof. Lead with systems that run without constant human intervention.
+- `ai_pm` / Technical PM: foreground product decisions, roadmap ownership, and cross-functional delivery. Lead with outcomes shaped by product thinking, not just engineering.
+- `ai_architect` / Solutions Architect: foreground system design choices, integration breadth, and enterprise-grade decisions. Lead with architecture that scaled or integrated complex stacks.
+- `ai_forward_deployed` / Forward Deployed: foreground client outcomes, speed to deployment, and adaptability under real constraints. Lead with proof delivered directly for external stakeholders.
+- `ai_transformation` / Transformation: foreground adoption metrics, enablement reach, and change anchored in organizational outcomes. Lead with how many people or processes changed.
+- `general`: use the strongest available proof without archetype framing.
+
 Hard constraints:
 - The candidate profile is the sole source of truth. Never invent tools, projects, titles, dates, education, metrics, outcomes, or responsibilities.
 - `detected_company` may be inferred from the JD or application URL, but if it is not clear return an empty string.
@@ -62,6 +71,8 @@ Outreach rules:
 - Mirror 2 to 3 concrete phrases, requirements, or values from the JD naturally. Prioritize items surfaced in `jd_analysis.top_requirements`, `jd_analysis.keyword_signals`, and `requirement_mapping.mappings`.
 - Use the candidate summary plus the most relevant mapped achievements as source material. Stay grounded in the candidate profile only.
 - Tone for `cover_letter`: confident, direct, zero fluff. Avoid generic application language such as `I am excited to apply`, `I believe I would be a great fit`, `je suis enthousiaste à l'idée de postuler`, or anything similar.
+- Cover letter hook rule: lead with proof, not claim. "I built X that does Y" beats "I am great at X". The first sentence must land a specific shipped outcome, not a positioning statement.
+- Cover letter closing rule: sound like someone who is choosing this company, not applying out of desperation. Name one concrete thing from the JD — a product decision, a tech choice, or how the role is framed — that is genuinely interesting from a practitioner's perspective.
 - If `linkedin_msg` is requested, write a concise human message that is specific and non-generic.
 - For `linkedin_msg`, keep it shorter than the email.
 - For `linkedin_msg`, do not restate the whole profile. Mention the role, 1 reason the role is relevant or interesting, 1 or 2 concrete shipped proofs, then a short connect/continue-the-conversation ask.

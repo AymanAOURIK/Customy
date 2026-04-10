@@ -20,6 +20,7 @@ APPLICATION_EXTRA_COLUMNS = {
     "total_cost_usd": "REAL",
     "api_attempts": "INTEGER",
     "pricing_basis": "TEXT",
+    "role_archetype": "TEXT",
 }
 
 
@@ -103,6 +104,18 @@ def init_db(db_path: str) -> None:
                 rejections       INTEGER NOT NULL DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS answer_bank (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                question_key    TEXT    NOT NULL UNIQUE,
+                question_text   TEXT    NOT NULL,
+                answer_text     TEXT    NOT NULL,
+                answer_source   TEXT    NOT NULL DEFAULT 'manual',
+                language        TEXT    NOT NULL DEFAULT 'en',
+                category        TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS api_usage (
                 id                    INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -147,6 +160,7 @@ def insert_application(
     initial_score: float | None,
     updated_score: float | None,
     usage_summary: dict | None = None,
+    archetype: str | None = None,
 ) -> int:
     """Returns new application id."""
 
@@ -161,9 +175,9 @@ def insert_application(
                 tokens_used, model_used, score, initial_score, updated_score,
                 prompt_tokens, cached_prompt_tokens, completion_tokens,
                 input_cost_usd, cached_input_cost_usd, output_cost_usd, total_cost_usd,
-                api_attempts, pricing_basis
+                api_attempts, pricing_basis, role_archetype
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 company,
@@ -193,6 +207,7 @@ def insert_application(
                 usage.get("total_cost_usd"),
                 usage.get("attempt_count"),
                 usage.get("pricing_basis"),
+                archetype,
             ),
         )
         return int(cursor.lastrowid)
@@ -477,3 +492,136 @@ def get_quick_stats(db_path) -> dict:
     }
 
 
+def get_apply_queue(db_path: str, min_score: float = 0.0, limit: int = 200) -> list[dict]:
+    """Returns generated-but-not-applied applications sorted by score descending."""
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM applications
+            WHERE status = 'generated'
+              AND COALESCE(is_duplicate, 0) = 0
+              AND COALESCE(updated_score, initial_score, score, 0) >= ?
+            ORDER BY COALESCE(updated_score, initial_score, score, 0) DESC,
+                     datetime(created_at) DESC
+            LIMIT ?
+            """,
+            (min_score, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_analytics(db_path: str) -> dict:
+    """Funnel conversion rates, archetype breakdown, score distribution, score by outcome."""
+    with _connect(db_path) as conn:
+        funnel_rows = conn.execute(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM applications
+            WHERE COALESCE(is_duplicate, 0) = 0
+            GROUP BY status
+            """
+        ).fetchall()
+        archetype_rows = conn.execute(
+            """
+            SELECT COALESCE(role_archetype, 'general') AS archetype,
+                   COUNT(*) AS count,
+                   ROUND(AVG(COALESCE(updated_score, initial_score, score)), 1) AS avg_score,
+                   SUM(CASE WHEN status IN ('interviewing', 'offer') THEN 1 ELSE 0 END) AS positive_outcomes,
+                   SUM(CASE WHEN status = 'applied' THEN 1 ELSE 0 END) AS applied_count
+            FROM applications
+            WHERE COALESCE(is_duplicate, 0) = 0
+            GROUP BY role_archetype
+            ORDER BY count DESC
+            """
+        ).fetchall()
+        score_dist_rows = conn.execute(
+            """
+            SELECT
+              CASE
+                WHEN COALESCE(score, 0) >= 80 THEN '80-100'
+                WHEN COALESCE(score, 0) >= 60 THEN '60-79'
+                WHEN COALESCE(score, 0) >= 40 THEN '40-59'
+                ELSE '0-39'
+              END AS bucket,
+              COUNT(*) AS count
+            FROM applications
+            WHERE COALESCE(is_duplicate, 0) = 0
+            GROUP BY bucket
+            ORDER BY bucket DESC
+            """
+        ).fetchall()
+        outcome_rows = conn.execute(
+            """
+            SELECT status,
+                   ROUND(AVG(COALESCE(updated_score, initial_score, score)), 1) AS avg_score,
+                   COUNT(*) AS count
+            FROM applications
+            WHERE COALESCE(is_duplicate, 0) = 0
+            GROUP BY status
+            ORDER BY count DESC
+            """
+        ).fetchall()
+
+    funnel = {row["status"]: int(row["count"]) for row in funnel_rows}
+    total = sum(funnel.values()) or 1
+    post_generated = sum(
+        funnel.get(s, 0) for s in ("applied", "interviewing", "offer", "rejected", "ghosted")
+    )
+    applied_plus = sum(funnel.get(s, 0) for s in ("interviewing", "offer"))
+
+    return {
+        "funnel": funnel,
+        "conversion_rates": {
+            "generated_to_applied": round(post_generated / total * 100, 1),
+            "applied_to_interview": round(
+                funnel.get("interviewing", 0) / max(post_generated, 1) * 100, 1
+            ),
+            "interview_to_offer": round(
+                funnel.get("offer", 0) / max(funnel.get("interviewing", 1), 1) * 100, 1
+            ),
+        },
+        "archetypes": [dict(r) for r in archetype_rows],
+        "score_distribution": [dict(r) for r in score_dist_rows],
+        "score_by_outcome": [dict(r) for r in outcome_rows],
+    }
+
+
+def get_answer_bank(db_path: str) -> list[dict]:
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM answer_bank ORDER BY category, question_key"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def upsert_answer(
+    db_path: str,
+    question_key: str,
+    question_text: str,
+    answer_text: str,
+    *,
+    category: str = "",
+    language: str = "en",
+    source: str = "manual",
+) -> None:
+    with _connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO answer_bank
+                (question_key, question_text, answer_text, answer_source, language, category, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(question_key) DO UPDATE SET
+                question_text  = excluded.question_text,
+                answer_text    = excluded.answer_text,
+                answer_source  = excluded.answer_source,
+                language       = excluded.language,
+                category       = excluded.category,
+                updated_at     = datetime('now')
+            """,
+            (question_key, question_text, answer_text, source, language, category or None),
+        )
+
+
+def delete_answer(db_path: str, question_key: str) -> None:
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM answer_bank WHERE question_key = ?", (question_key,))
