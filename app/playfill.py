@@ -31,11 +31,15 @@ _GREENHOUSE_FIELDS: list[dict] = [
 ]
 
 _LEVER_FIELDS: list[dict] = [
-    {"selector": '[name="name"]',                 "answer_key": "full_name",         "label": "Full name"},
-    {"selector": '[name="email"]',                "answer_key": "email",             "label": "Email"},
-    {"selector": '[name="phone"]',                "answer_key": "phone_number",      "label": "Phone"},
-    {"selector": '[name="org"]',                  "answer_key": "current_company",   "label": "Current company"},
-    {"selector": 'textarea[name="comments"]',     "answer_key": "cover_letter_text", "label": "Cover letter / comments"},
+    {"selector": '[name="name"]',                          "answer_key": "full_name",         "label": "Full name"},
+    {"selector": '[name="email"]',                         "answer_key": "email",             "label": "Email"},
+    {"selector": '[name="phone"]',                         "answer_key": "phone_number",      "label": "Phone"},
+    {"selector": '[name="org"]',                           "answer_key": "current_company",   "label": "Current company"},
+    {"selector": '[name="urls[LinkedIn]"]',                "answer_key": "linkedin_url",      "label": "LinkedIn URL"},
+    {"selector": '[name="urls[LinkedIn URL]"]',            "answer_key": "linkedin_url",      "label": "LinkedIn URL (alt)"},
+    {"selector": '[name="urls[Portfolio]"]',               "answer_key": "github_url",        "label": "Portfolio URL"},
+    {"selector": '[name="urls[GitHub]"]',                  "answer_key": "github_url",        "label": "GitHub URL"},
+    {"selector": 'textarea[name="comments"]',              "answer_key": "cover_letter_text", "label": "Cover letter / comments"},
 ]
 
 _WORKDAY_FIELDS: list[dict] = [
