@@ -625,3 +625,11 @@ def upsert_answer(
 def delete_answer(db_path: str, question_key: str) -> None:
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM answer_bank WHERE question_key = ?", (question_key,))
+
+
+def get_answer_by_key(db_path: str, question_key: str) -> dict | None:
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM answer_bank WHERE question_key = ?", (question_key,)
+        ).fetchone()
+    return dict(row) if row else None

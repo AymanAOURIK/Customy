@@ -15,6 +15,7 @@ from pathlib import Path
 
 from app.db import init_db
 from app.profile import build_candidate_context
+from app.seeder import seed_answer_bank
 from app.server import run_server
 from config import load_config
 
@@ -56,6 +57,7 @@ def main() -> None:
     candidate_context = build_candidate_context(candidate_yaml_path)
 
     init_db(cfg["paths"]["db_path"])
+    seed_answer_bank(cfg["paths"]["db_path"], candidate_context)
 
     threading.Timer(1.2, _open_browser, args=(f"http://{host}:{port}",)).start()
 

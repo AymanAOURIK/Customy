@@ -44,6 +44,12 @@
   var newQuestionInput = document.getElementById("aq-new-question");
   var newAnswerInput = document.getElementById("aq-new-answer");
   var saveAnswerBtn = document.getElementById("aq-save-answer-btn");
+  var fillOverlay = document.getElementById("aq-fill-overlay");
+  var fillClose = document.getElementById("aq-fill-close");
+  var fillFieldPlan = document.getElementById("aq-fill-field-plan");
+  var fillSnippetPre = document.getElementById("aq-fill-snippet-pre");
+  var fillVendorLabel = document.getElementById("aq-fill-vendor-label");
+  var fillCopyBtn = document.getElementById("aq-fill-copy-btn");
 
   if (!tableBody) return; // section not present
 
@@ -78,7 +84,7 @@
   function loadQueue() {
     if (tableBody) {
       tableBody.innerHTML =
-        '<tr><td colspan="7" class="aq-empty-row">Loading&hellip;</td></tr>';
+        '<tr><td colspan="8" class="aq-empty-row">Loading&hellip;</td></tr>';
     }
     fetch("/api/apply-queue?min_score=" + _minScore)
       .then(function (r) { return r.json(); })
@@ -89,7 +95,7 @@
       .catch(function () {
         if (tableBody) {
           tableBody.innerHTML =
-            '<tr><td colspan="7" class="aq-empty-row">Failed to load queue.</td></tr>';
+            '<tr><td colspan="8" class="aq-empty-row">Failed to load queue.</td></tr>';
         }
       });
   }
@@ -108,7 +114,7 @@
 
     if (!filtered.length) {
       tableBody.innerHTML =
-        '<tr><td colspan="7" class="aq-empty-row">No applications in queue' +
+        '<tr><td colspan="8" class="aq-empty-row">No applications in queue' +
         (_selectedArchetype ? " for this archetype" : "") + ".</td></tr>";
       return;
     }
@@ -132,6 +138,9 @@
           '<td class="aq-cell-role">' + escHtml(app.role || "-") + "</td>" +
           '<td class="aq-cell-date">' + fmtDate(app.created_at) + "</td>" +
           "<td>" + ats + "</td>" +
+          "<td>" +
+            '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Auto-fill</button>' +
+          "</td>" +
           '<td class="aq-cell-actions">' +
             '<button class="aq-btn" onclick="AQ.openFolder(' + app.id + ')">Package</button>' +
             '<button class="aq-btn" onclick="AQ.openAnswers(' + app.id + ')">Answers</button>' +
@@ -165,6 +174,58 @@
   function openAnswers() {
     renderAnswerModal();
     if (modalOverlay) modalOverlay.classList.add("aq-modal-overlay--visible");
+  }
+
+  function openFillSnippet(appId) {
+    if (fillSnippetPre) fillSnippetPre.textContent = "Loading\u2026";
+    if (fillFieldPlan) fillFieldPlan.innerHTML = "";
+    if (fillVendorLabel) fillVendorLabel.textContent = "";
+    if (fillOverlay) fillOverlay.classList.add("aq-modal-overlay--visible");
+
+    fetch("/api/apply-assist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ app_id: appId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var plan = data.fill_plan || {};
+        var fields = plan.fields || [];
+        var snippet = plan.js_snippet || "";
+        var vendor = plan.vendor || "generic";
+        var missing = plan.missing || [];
+
+        if (fillVendorLabel) {
+          fillVendorLabel.textContent = "ATS: " + vendor.toUpperCase();
+        }
+
+        // Render field plan
+        if (fillFieldPlan && fields.length) {
+          var html = '<div class="aq-fill-field-list">';
+          fields.forEach(function (f) {
+            var cls = f.found ? "aq-fill-field--ok" : "aq-fill-field--missing";
+            html +=
+              '<div class="aq-fill-field ' + cls + '">' +
+              '<span class="aq-fill-field-label">' + escHtml(f.label) + "</span>" +
+              '<span class="aq-fill-field-value">' + (f.found ? escHtml(f.value.slice(0, 80)) : "— not in Answer Bank") + "</span>" +
+              "</div>";
+          });
+          html += "</div>";
+          if (missing.length) {
+            html += '<p class="aq-fill-missing-hint">Missing keys: ' + missing.map(escHtml).join(", ") + '. Add them in the Answer Bank.</p>';
+          }
+          fillFieldPlan.innerHTML = html;
+        }
+
+        if (fillSnippetPre) fillSnippetPre.textContent = snippet;
+
+        if (fillCopyBtn) {
+          fillCopyBtn.onclick = function () { copyAnswer(snippet); };
+        }
+      })
+      .catch(function () {
+        if (fillSnippetPre) fillSnippetPre.textContent = "Failed to generate snippet.";
+      });
   }
 
   /* ── Answer bank modal ───────────────────────────────── */
@@ -290,6 +351,22 @@
     saveAnswerBtn.addEventListener("click", saveAnswer);
   }
 
+  /* ── Fill snippet modal bindings ─────────────────────── */
+
+  if (fillClose) {
+    fillClose.addEventListener("click", function () {
+      if (fillOverlay) fillOverlay.classList.remove("aq-modal-overlay--visible");
+    });
+  }
+
+  if (fillOverlay) {
+    fillOverlay.addEventListener("click", function (e) {
+      if (e.target === fillOverlay) {
+        fillOverlay.classList.remove("aq-modal-overlay--visible");
+      }
+    });
+  }
+
   /* ── Refresh on generation ───────────────────────────── */
 
   window.addEventListener("customy:application-generated", function () {
@@ -315,6 +392,7 @@
     markApplied: markApplied,
     openFolder: openFolder,
     openAnswers: openAnswers,
+    openFillSnippet: openFillSnippet,
     deleteAnswer: deleteAnswer,
     copyAnswer: copyAnswer,
   };

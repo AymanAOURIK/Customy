@@ -2014,3 +2014,99 @@ body.platform-body {
   font-family: inherit;
   line-height: 1.5;
 }
+
+/* ── Auto-fill button ──────────────────────────────── */
+.aq-btn--fill {
+  background: var(--shell-accent-soft, rgba(99,102,241,.12));
+  color: var(--shell-accent, #6366f1);
+  border-color: transparent;
+}
+.aq-btn--fill:hover {
+  background: var(--shell-accent-soft-strong, rgba(99,102,241,.22));
+}
+
+/* ── Fill snippet modal ────────────────────────────── */
+.aq-modal--wide {
+  max-width: 780px;
+  width: 95vw;
+}
+
+.aq-fill-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.aq-fill-field {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.aq-fill-field--ok {
+  background: var(--shell-success-soft, rgba(34,197,94,.1));
+}
+
+.aq-fill-field--missing {
+  background: var(--shell-warn-soft, rgba(245,158,11,.1));
+}
+
+.aq-fill-field-label {
+  font-weight: 600;
+  min-width: 130px;
+  color: var(--shell-text-muted);
+}
+
+.aq-fill-field-value {
+  color: var(--shell-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aq-fill-missing-hint {
+  font-size: 0.78rem;
+  color: var(--shell-text-muted);
+  margin: 4px 0 12px;
+}
+
+.aq-fill-snippet-wrap {
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.aq-fill-snippet-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: var(--shell-surface-raised);
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+
+.aq-fill-vendor-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--shell-text-muted);
+  text-transform: uppercase;
+}
+
+.aq-fill-snippet-pre {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--shell-surface);
+  font-family: ui-monospace, monospace;
+  font-size: 0.73rem;
+  line-height: 1.55;
+  color: var(--shell-text);
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 380px;
+  overflow-y: auto;
+}
