@@ -10,3 +10,5 @@ __pycache__/
 *.fdb_latexmk
 *.synctex.gz
 CLAUDE.local.md
+
+.venv/
