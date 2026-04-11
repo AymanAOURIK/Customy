@@ -29,6 +29,19 @@ def load_config() -> dict:
         llm["generation_model"] = os.environ["GENERATION_MODEL"].strip()
     if os.environ.get("ANALYSIS_MODEL"):
         llm["analysis_model"] = os.environ["ANALYSIS_MODEL"].strip()
+
+    # V3: deployment mode and Supabase config
+    mode = os.environ.get("CUSTOMY_MODE", "local").strip().lower()
+    cfg["mode"] = mode  # "local" or "saas"
+    if mode == "saas":
+        cfg["supabase"] = {
+            "url": os.environ.get("SUPABASE_URL", ""),
+            "anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
+            "service_role_key": os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+            "jwt_secret": os.environ.get("SUPABASE_JWT_SECRET", ""),
+        }
+        cfg["database_url"] = os.environ.get("DATABASE_URL", "")
+
     return cfg
 
 
