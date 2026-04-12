@@ -24,6 +24,7 @@
       })();
     </script>
     <link rel="stylesheet" href="/static/style.css" />
+    <!-- __CUSTOMY_CONFIG__ -->
   </head>
   <body class="platform-body">
     <div class="platform">
@@ -883,9 +884,7 @@
             if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
             if (nameEl)   nameEl.textContent   = handle || email;
             if (logoutBtn) logoutBtn.removeAttribute("hidden");
-            /* Refresh dashboard data now that the token is available */
             if (window.CustomyDashboard) CustomyDashboard.refresh();
-            /* Init profile editor — safe to call multiple times, idempotent */
             if (window.CProfileEditor) CProfileEditor.init();
           } else {
             /* Signed out — show login overlay */

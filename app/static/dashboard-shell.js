@@ -106,7 +106,10 @@
   }
 
   function fetchJson(url, options) {
-    return fetch(url, options || {})
+    // Use CAuth.authFetch so that SaaS mode requests carry the JWT.
+    // In local mode CAuth.getToken() returns null and authFetch is plain fetch.
+    var fetcher = window.CAuth ? CAuth.authFetch.bind(CAuth) : fetch.bind(window);
+    return fetcher(url, options || {})
       .then(function (res) {
         return res.json();
       })
