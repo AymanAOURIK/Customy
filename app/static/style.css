@@ -2335,3 +2335,33 @@ body.platform-body {
 .profile-editor-status--saving  { color: var(--shell-text-muted, #888); }
 .profile-editor-status--success  { color: var(--shell-success, #2d6f4b); }
 .profile-editor-status--error    { color: var(--shell-danger,  #9a3e31); }
+
+/* ── Admin Dashboard ───────────────────────────────────── */
+
+.admin-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Status badges */
+.admin-badge--idea       { background: var(--shell-surface-soft-alt, #e8e8f0); color: var(--shell-text-muted, #666); }
+.admin-badge--planned    { background: rgba(99,102,241,.15); color: #4f46e5; }
+.admin-badge--inprogress { background: rgba(234,179,8,.15);  color: #854d0e; }
+.admin-badge--done       { background: var(--shell-success-soft, rgba(34,197,94,.12)); color: var(--shell-success-strong, #15803d); }
+.admin-badge--cancelled  { background: rgba(239,68,68,.1);   color: #b91c1c; }
+
+/* Priority badges */
+.admin-badge--high   { background: rgba(239,68,68,.12);  color: #b91c1c; }
+.admin-badge--medium { background: rgba(234,179,8,.12);  color: #854d0e; }
+.admin-badge--low    { background: rgba(34,197,94,.10);  color: var(--shell-success-strong, #15803d); }
+
+/* Ideas table action buttons */
+.admin-idea-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
