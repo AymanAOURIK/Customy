@@ -3,7 +3,9 @@
     "allow": [
       "Read(/mnt/c/Users/LENOVO/desktop/Customy output job applications/**)",
       "Bash(grep -E \"\\\\.py$|\\\\.yaml$|\\\\.yml$|\\\\.md$\")",
-      "Bash(grep -r \"admin\\\\|ADMIN\" /mnt/c/Users/LENOVO/desktop/customy-worktrees/admin-dashboard/app/*.py)"
+      "Bash(grep -r \"admin\\\\|ADMIN\" /mnt/c/Users/LENOVO/desktop/customy-worktrees/admin-dashboard/app/*.py)",
+      "Bash(ls:*)",
+      "Bash(node --check /mnt/c/Users/LENOVO/desktop/customy-worktrees/tracking-dashboard/app/static/tracker.js)"
     ]
   }
 }

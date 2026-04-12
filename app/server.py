@@ -20,15 +20,18 @@ from app.db import (
     get_answer_bank,
     get_answer_by_key,
     get_application,
+    get_application_events,
     get_apply_queue,
     get_daily_stats,
     get_funnel_stats,
     get_quick_stats,
+    get_tracker_applications,
     insert_application,
     list_applications,
     record_api_usage,
     refresh_daily_stats,
     set_duplicate_flag,
+    update_application_notes,
     update_status,
     upsert_answer,
 )
@@ -207,6 +210,7 @@ def _serialize_application(row: dict) -> dict:
         "api_attempts": row.get("api_attempts"),
         "outputs": outputs,
         "job_application_url": row.get("job_application_url"),
+        "notes": row.get("notes") or "",
         "folder_path": row.get("outputs_path"),
         "folder_url": f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None,
     }
@@ -301,6 +305,13 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     return
                 if parsed.path == "/api/analytics":
                     self._handle_analytics()
+                    return
+                if parsed.path == "/api/tracker":
+                    self._handle_tracker()
+                    return
+                _ev_match = re.fullmatch(r"/api/applications/(\d+)/events", parsed.path)
+                if _ev_match:
+                    self._handle_application_events(int(_ev_match.group(1)))
                     return
                 if parsed.path == "/api/answer-bank":
                     self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
@@ -751,6 +762,20 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
             if cfg["mode"] == "saas" and dispatch_jobs_patch(self, parsed.path, cfg):
                 return
+            _notes_match = re.fullmatch(r"/api/applications/(\d+)/notes", parsed.path)
+            if _notes_match:
+                try:
+                    payload = _read_json(self)
+                    app_id = int(_notes_match.group(1))
+                    notes = str(payload.get("notes", "")).strip()
+                    update_application_notes(db_path, app_id, notes)
+                    row = get_application(db_path, app_id)
+                    self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
             match = re.fullmatch(r"/api/applications/(\d+)/status", parsed.path)
             if not match:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -828,6 +853,26 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
         def _handle_analytics(self) -> None:
             self._json(HTTPStatus.OK, get_analytics(db_path))
+
+        def _handle_tracker(self) -> None:
+            rows = get_tracker_applications(db_path)
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "items": [
+                        {**_serialize_application(row), "last_status_at": row.get("last_status_at")}
+                        for row in rows
+                    ],
+                },
+            )
+
+        def _handle_application_events(self, app_id: int) -> None:
+            row = get_application(db_path, app_id)
+            if not row:
+                self._json(HTTPStatus.NOT_FOUND, {"error": "Application not found."})
+                return
+            events = get_application_events(db_path, app_id)
+            self._json(HTTPStatus.OK, {"application_id": app_id, "events": events})
 
         def _handle_stats(self) -> None:
             refresh_daily_stats(db_path)
