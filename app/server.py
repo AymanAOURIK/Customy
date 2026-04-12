@@ -38,6 +38,14 @@ from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
 from app.targeting import candidate_keywords_from_profile
+from app.routes_auth import handle_auth_me
+from app.routes_profile import handle_profile_create, handle_profile_get, handle_profile_update
+from app.routes_admin import (
+    dispatch_admin_delete,
+    dispatch_admin_get,
+    dispatch_admin_post,
+    dispatch_admin_put,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = PROJECT_ROOT / "app" / "templates"
@@ -281,6 +289,18 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 if parsed.path == "/api/answer-bank":
                     self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
                     return
+                if cfg["mode"] == "saas":
+                    if parsed.path == "/api/auth/me":
+                        handle_auth_me(self, cfg)
+                        return
+                    if parsed.path == "/api/profile":
+                        handle_profile_get(self, cfg)
+                        return
+                    if parsed.path.startswith("/api/admin/"):
+                        if dispatch_admin_get(self, parsed.path, cfg):
+                            return
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+                        return
                 self.send_error(HTTPStatus.NOT_FOUND)
             except ValueError as exc:
                 if parsed.path.startswith("/api/"):
@@ -431,6 +451,15 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
 
+            if cfg["mode"] == "saas":
+                if parsed.path == "/api/profile":
+                    handle_profile_create(self, cfg)
+                    return
+                if parsed.path.startswith("/api/admin/"):
+                    if dispatch_admin_post(self, parsed.path, cfg):
+                        return
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+                    return
             if parsed.path != "/api/generate":
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
@@ -631,6 +660,47 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+
+        def do_PUT(self) -> None:
+            if cfg["mode"] != "saas":
+                self._json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "Method not allowed"})
+                return
+            parsed = urlparse(self.path)
+            try:
+                if parsed.path == "/api/profile":
+                    handle_profile_update(self, cfg)
+                    return
+                if parsed.path.startswith("/api/admin/"):
+                    if dispatch_admin_put(self, parsed.path, cfg):
+                        return
+                self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+            except Exception as exc:
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+
+        def do_DELETE(self) -> None:
+            if cfg["mode"] != "saas":
+                self._json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "Method not allowed"})
+                return
+            parsed = urlparse(self.path)
+            try:
+                if parsed.path.startswith("/api/admin/"):
+                    if dispatch_admin_delete(self, parsed.path, cfg):
+                        return
+                self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+            except Exception as exc:
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+
+        def do_OPTIONS(self) -> None:
+            if cfg["mode"] != "saas":
+                self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
+                return
+            origin = cfg.get("cors_origin", "*")
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Max-Age", "86400")
+            self.end_headers()
 
         def _handle_apply_queue(self, query_string: str) -> None:
             from urllib.parse import parse_qs
