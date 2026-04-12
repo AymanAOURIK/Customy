@@ -2233,3 +2233,105 @@ body.platform-body {
   border-radius: 8px;
 }
 .auth-logout-btn[hidden] { display: none; }
+
+/* ── Profile Editor ──────────────────────────────────────── */
+
+.profile-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 8px;
+}
+
+.pe-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 600px) {
+  .pe-row { grid-template-columns: 1fr; }
+}
+
+.pe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pe-field--full { grid-column: 1 / -1; }
+
+.pe-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--shell-text-muted, #555);
+  letter-spacing: 0.01em;
+}
+
+.pe-required { color: var(--shell-danger, #9a3e31); }
+
+.pe-field-type {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--shell-text-muted, #888);
+  font-family: ui-monospace, monospace;
+}
+
+.pe-input,
+.pe-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--shell-border, rgba(0,0,0,.1));
+  border-radius: 8px;
+  background: var(--shell-input-bg, #fafafa);
+  font-size: 0.875rem;
+  color: var(--shell-text, #111);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms, box-shadow 120ms;
+  resize: vertical;
+}
+
+.pe-input:focus,
+.pe-textarea:focus {
+  border-color: var(--shell-accent, #8d5d2f);
+  box-shadow: 0 0 0 3px var(--shell-accent-soft, rgba(141,93,47,.12));
+}
+
+.pe-textarea--mono {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.pe-divider {
+  border: none;
+  border-top: 1px solid var(--shell-border, rgba(0,0,0,.08));
+  margin: 4px 0;
+}
+
+.pe-json-hint {
+  font-size: 0.8rem;
+  color: var(--shell-text-muted, #888);
+  margin: 0;
+}
+
+.pe-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.profile-editor-status-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.profile-editor-status {
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.profile-editor-status--saving  { color: var(--shell-text-muted, #888); }
+.profile-editor-status--success  { color: var(--shell-success, #2d6f4b); }
+.profile-editor-status--error    { color: var(--shell-danger,  #9a3e31); }

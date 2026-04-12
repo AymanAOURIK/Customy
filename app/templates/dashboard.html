@@ -72,6 +72,10 @@
           </a>
 
           <div class="sidebar-section-label">Manage</div>
+          <a class="sidebar-link" href="#profile-editor" data-section="section-profile-editor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            My Profile
+          </a>
           <a class="sidebar-link" href="#library" data-section="section-library">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
             Library
@@ -648,6 +652,129 @@
           </section>
 
           <!-- ═══════════════════════════════════════════ -->
+          <!-- PROFILE EDITOR                              -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-profile-editor" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>My Profile</h1>
+                <p>Manage your candidate data for SaaS resume generation</p>
+              </div>
+            </div>
+
+            <!-- Local mode notice — hidden in SaaS mode by profile-editor.js -->
+            <div id="profile-editor-local-notice" class="shell-card">
+              <div class="placeholder-section">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <h3 class="placeholder-title">Profile Editor</h3>
+                <p class="placeholder-text">Profile management is available in SaaS mode. In local mode, edit <code>candidate.yaml</code> directly.</p>
+              </div>
+            </div>
+
+            <!-- Form wrap — shown in SaaS mode by profile-editor.js -->
+            <div id="profile-editor-form-wrap" hidden>
+              <div class="shell-card">
+                <div class="shell-card-header">
+                  <div>
+                    <h3 class="shell-card-title" id="profile-editor-mode-label">Profile</h3>
+                    <p class="shell-card-subtitle">Your candidate data used for resume generation</p>
+                  </div>
+                  <div class="profile-editor-status-wrap">
+                    <span id="profile-editor-status" class="profile-editor-status"></span>
+                  </div>
+                </div>
+
+                <div class="profile-editor-form">
+                  <!-- Row: full_name + email -->
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-full_name">Full Name <span class="pe-required">*</span></label>
+                      <input id="pe-full_name" type="text" class="pe-input" placeholder="e.g. Jane Doe" autocomplete="name" />
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-email">Email</label>
+                      <input id="pe-email" type="email" class="pe-input" placeholder="e.g. jane@example.com" autocomplete="email" />
+                    </div>
+                  </div>
+
+                  <!-- Row: phone + location -->
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-phone">Phone</label>
+                      <input id="pe-phone" type="text" class="pe-input" placeholder="e.g. +1 555 000 0000" autocomplete="tel" />
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-location">Location</label>
+                      <input id="pe-location" type="text" class="pe-input" placeholder="e.g. Paris, France" />
+                    </div>
+                  </div>
+
+                  <!-- Row: linkedin + github -->
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-linkedin">LinkedIn URL</label>
+                      <input id="pe-linkedin" type="url" class="pe-input" placeholder="https://linkedin.com/in/..." />
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-github">GitHub URL</label>
+                      <input id="pe-github" type="url" class="pe-input" placeholder="https://github.com/..." />
+                    </div>
+                  </div>
+
+                  <!-- Headline (full width) -->
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="pe-headline">Headline</label>
+                    <input id="pe-headline" type="text" class="pe-input" placeholder="e.g. Senior AI Engineer · Python · LLMs" />
+                  </div>
+
+                  <!-- Summary -->
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="pe-summary">Summary</label>
+                    <textarea id="pe-summary" class="pe-textarea" rows="4" placeholder="2–3 sentence professional summary&hellip;"></textarea>
+                  </div>
+
+                  <hr class="pe-divider" />
+                  <p class="pe-json-hint">The fields below are stored as JSON. Edit them directly as JSON arrays or objects.</p>
+
+                  <!-- Skills -->
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="pe-skills">Skills <span class="pe-field-type">object</span></label>
+                    <textarea id="pe-skills" class="pe-textarea pe-textarea--mono" rows="6" placeholder='{"Python": 5, "React": 4}'></textarea>
+                  </div>
+
+                  <!-- Experiences -->
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="pe-experiences">Experiences <span class="pe-field-type">array</span></label>
+                    <textarea id="pe-experiences" class="pe-textarea pe-textarea--mono" rows="8" placeholder='[{"title": "Engineer", "company": "Acme", "start": "2022-01", "end": null, "bullets": []}]'></textarea>
+                  </div>
+
+                  <!-- Education -->
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="pe-education">Education <span class="pe-field-type">array</span></label>
+                    <textarea id="pe-education" class="pe-textarea pe-textarea--mono" rows="5" placeholder='[{"degree": "MSc Computer Science", "school": "University Name", "year": "2020"}]'></textarea>
+                  </div>
+
+                  <!-- Row: spoken_languages + scoring_keywords -->
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-spoken_languages">Spoken Languages <span class="pe-field-type">array</span></label>
+                      <textarea id="pe-spoken_languages" class="pe-textarea pe-textarea--mono" rows="3" placeholder='["English", "French"]'></textarea>
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="pe-scoring_keywords">Scoring Keywords <span class="pe-field-type">array</span></label>
+                      <textarea id="pe-scoring_keywords" class="pe-textarea pe-textarea--mono" rows="3" placeholder='["LLM", "Python", "REST API"]'></textarea>
+                    </div>
+                  </div>
+
+                  <div class="pe-actions">
+                    <button id="profile-editor-save-btn" class="btn-primary">Save Changes</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════════════════════════════════ -->
           <!-- SETTINGS                                    -->
           <!-- ═══════════════════════════════════════════ -->
           <section id="section-settings" class="platform-section">
@@ -710,6 +837,7 @@
     <script src="/static/market-intel.js" defer></script>
     <script src="/static/profile-intelligence-data.js" defer></script>
     <script src="/static/profile-intelligence.js" defer></script>
+    <script src="/static/profile-editor.js" defer></script>
     <!-- Supabase JS SDK (SaaS mode only; harmless in local mode) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="/static/auth-ui.js" defer></script>
@@ -718,47 +846,52 @@
       window.addEventListener("load", function () {
         var cfg = window.CUSTOMY_CONFIG || { mode: "local" };
 
+        /* ── Local mode: init profile editor with local notice ── */
+        if (cfg.mode !== "saas") {
+          if (window.CProfileEditor) CProfileEditor.init();
+          return;
+        }
+
         /* ── SaaS mode: initialise Supabase and wire up auth state ── */
-        if (cfg.mode === "saas" && cfg.supabaseUrl && cfg.supabaseAnonKey) {
+        if (cfg.supabaseUrl && cfg.supabaseAnonKey) {
           CAuth.init(cfg.supabaseUrl, cfg.supabaseAnonKey);
+        }
 
-          /* Update sidebar mode badge */
-          var modeTitle = document.getElementById("sidebar-mode-title");
-          var modeText  = document.getElementById("sidebar-mode-text");
-          if (modeTitle) modeTitle.textContent = "SaaS Mode";
-          if (modeText)  modeText.textContent  = "Signed-in session. Data synced to the cloud.";
+        /* Update sidebar mode badge */
+        var modeTitle = document.getElementById("sidebar-mode-title");
+        var modeText  = document.getElementById("sidebar-mode-text");
+        if (modeTitle) modeTitle.textContent = "SaaS Mode";
+        if (modeText)  modeText.textContent  = "Signed-in session. Data synced to the cloud.";
 
-          /* Logout button */
-          var logoutBtn = document.getElementById("topbar-logout-btn");
-          if (logoutBtn) {
-            logoutBtn.addEventListener("click", function () {
-              logoutBtn.disabled = true;
-              CAuth.signOut().then(function () { logoutBtn.disabled = false; });
-            });
-          }
-
-          /* React to every auth-state change */
-          CAuth.onAuthStateChange(function (session) {
-            if (session) {
-              /* Signed in ─ hide overlay, update topbar, reload data */
-              if (window.CAuthUI) CAuthUI.hide();
-              var email  = (session.user && session.user.email) || "";
-              var handle = email.split("@")[0] || email;
-              var avatarEl = document.getElementById("topbar-user-avatar");
-              var nameEl   = document.getElementById("topbar-user-name");
-              if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
-              if (nameEl)   nameEl.textContent   = handle || email;
-              if (logoutBtn) logoutBtn.removeAttribute("hidden");
-              /* Refresh dashboard data now that the token is available */
-              if (window.CustomyDashboard) CustomyDashboard.refresh();
-            } else {
-              /* Signed out ─ show login overlay */
-              if (window.CAuthUI) CAuthUI.show();
-              if (logoutBtn) logoutBtn.setAttribute("hidden", "");
-            }
+        /* Logout button */
+        var logoutBtn = document.getElementById("topbar-logout-btn");
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", function () {
+            logoutBtn.disabled = true;
+            CAuth.signOut().then(function () { logoutBtn.disabled = false; });
           });
         }
-        /* local mode: no auth overlay, no token, dashboard loads as before */
+
+        /* React to every auth-state change */
+        CAuth.onAuthStateChange(function (session) {
+          if (session) {
+            /* Signed in — hide overlay, update topbar, init profile editor */
+            if (window.CAuthUI) CAuthUI.hide();
+            var email  = (session.user && session.user.email) || "";
+            var handle = email.split("@")[0] || email;
+            var avatarEl = document.getElementById("topbar-user-avatar");
+            var nameEl   = document.getElementById("topbar-user-name");
+            if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
+            if (nameEl)   nameEl.textContent   = handle || email;
+            if (logoutBtn) logoutBtn.removeAttribute("hidden");
+            if (window.CustomyDashboard) CustomyDashboard.refresh();
+            if (window.CProfileEditor) CProfileEditor.init();
+          } else {
+            /* Signed out — show login overlay */
+            if (window.CAuthUI) CAuthUI.show();
+            if (logoutBtn) logoutBtn.setAttribute("hidden", "");
+          }
+        });
       });
     </script>
   </body>
