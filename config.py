@@ -22,8 +22,7 @@ def load_config() -> dict:
     load_dotenv(ROOT / ".env")
     with (ROOT / "config.yaml").open("r", encoding="utf-8") as handle:
         cfg = yaml.safe_load(handle) or {}
-    for key, value in cfg.get("paths", {}).items():
-        cfg["paths"][key] = _resolve_path(value)
+    paths = cfg.setdefault("paths", {})
     llm = cfg.setdefault("llm", {})
     if os.environ.get("GENERATION_MODEL"):
         llm["generation_model"] = os.environ["GENERATION_MODEL"].strip()
@@ -33,6 +32,12 @@ def load_config() -> dict:
     # V3: deployment mode and Supabase config
     mode = os.environ.get("CUSTOMY_MODE", "local").strip().lower()
     cfg["mode"] = mode  # "local" or "saas"
+    if mode == "saas":
+        paths["applications_dir"] = os.environ.get("APPLICATIONS_DIR", "data/applications")
+
+    for key, value in paths.items():
+        cfg["paths"][key] = _resolve_path(value)
+
     if mode == "saas":
         cfg["supabase"] = {
             "url": os.environ.get("SUPABASE_URL", ""),

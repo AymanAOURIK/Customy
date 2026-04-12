@@ -28,6 +28,7 @@
   var _queue = [];
   var _selectedArchetype = "";
   var _minScore = 0;
+  var _isSaas = !!(window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas");
 
   /* ── DOM refs ────────────────────────────────────────── */
 
@@ -79,6 +80,19 @@
     return "aq-score--low";
   }
 
+  function apiFetch(url, options) {
+    var fetcher = _isSaas && window.CAuth ? CAuth.authFetch.bind(CAuth) : fetch.bind(window);
+    return fetcher(url, options || {})
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok || data.error) {
+            throw new Error((data && data.error) || ("Request failed (" + res.status + ")"));
+          }
+          return data;
+        });
+      });
+  }
+
   /* ── Load queue ──────────────────────────────────────── */
 
   function loadQueue() {
@@ -86,16 +100,15 @@
       tableBody.innerHTML =
         '<tr><td colspan="8" class="aq-empty-row">Loading&hellip;</td></tr>';
     }
-    fetch("/api/apply-queue?min_score=" + _minScore)
-      .then(function (r) { return r.json(); })
+    apiFetch("/api/apply-queue?min_score=" + _minScore)
       .then(function (data) {
         _queue = data.applications || [];
         renderQueue();
       })
-      .catch(function () {
+      .catch(function (err) {
         if (tableBody) {
           tableBody.innerHTML =
-            '<tr><td colspan="8" class="aq-empty-row">Failed to load queue.</td></tr>';
+            '<tr><td colspan="8" class="aq-empty-row">' + escHtml(err.message || "Failed to load queue.") + "</td></tr>";
         }
       });
   }
@@ -126,9 +139,11 @@
         var arch = app.archetype || "general";
         var archLabel = ARCHETYPE_LABELS[arch] || arch;
         var ats = escHtml(app.ats_vendor || "-");
-        var jobUrl = app.job_application_url
-          ? '<a href="' + escHtml(app.job_application_url) + '" target="_blank" rel="noreferrer" class="aq-ext-link">Open</a>'
-          : "-";
+        var helperButtons = _isSaas
+          ? '<button class="aq-btn" disabled title="Available only in local mode">Auto-fill</button>' +
+            '<button class="aq-btn" disabled title="Available only in local mode">Answers</button>'
+          : '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Auto-fill</button>' +
+            '<button class="aq-btn" onclick="AQ.openAnswers(' + app.id + ')">Answers</button>';
 
         return (
           "<tr>" +
@@ -138,12 +153,9 @@
           '<td class="aq-cell-role">' + escHtml(app.role || "-") + "</td>" +
           '<td class="aq-cell-date">' + fmtDate(app.created_at) + "</td>" +
           "<td>" + ats + "</td>" +
-          "<td>" +
-            '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Auto-fill</button>' +
-          "</td>" +
+          "<td>" + helperButtons + "</td>" +
           '<td class="aq-cell-actions">' +
-            '<button class="aq-btn" onclick="AQ.openFolder(' + app.id + ')">Package</button>' +
-            '<button class="aq-btn" onclick="AQ.openAnswers(' + app.id + ')">Answers</button>' +
+            '<button class="aq-btn" onclick="AQ.openPackage(' + app.id + ')">Package</button>' +
             '<button class="aq-btn aq-btn--apply" onclick="AQ.markApplied(' + app.id + ', this)">Applied ✓</button>' +
           "</td>" +
           "</tr>"
@@ -156,7 +168,7 @@
 
   function markApplied(appId, btn) {
     if (btn) btn.disabled = true;
-    fetch("/api/applications/" + appId + "/status", {
+    apiFetch("/api/applications/" + appId + "/status", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ new_status: "applied" }),
@@ -165,10 +177,22 @@
       .catch(function () { if (btn) btn.disabled = false; });
   }
 
-  function openFolder(appId) {
-    fetch("/api/applications/" + appId + "/open-folder", { method: "POST" }).catch(
-      function () {}
-    );
+  function openPackage(appId) {
+    var app = _queue.find(function (item) { return item.id === appId; }) || {};
+    if (!_isSaas && app.folder_url) {
+      apiFetch(app.folder_url, { method: "POST" }).catch(function () {});
+      return;
+    }
+    var outputs = app.outputs || {};
+    var url =
+      outputs.resume_pdf ||
+      outputs.resume_tex ||
+      outputs.cover_letter ||
+      outputs.linkedin_message ||
+      outputs.email_draft ||
+      null;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function openAnswers() {
@@ -182,12 +206,11 @@
     if (fillVendorLabel) fillVendorLabel.textContent = "";
     if (fillOverlay) fillOverlay.classList.add("aq-modal-overlay--visible");
 
-    fetch("/api/apply-assist", {
+    apiFetch("/api/apply-assist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ app_id: appId }),
     })
-      .then(function (r) { return r.json(); })
       .then(function (data) {
         var plan = data.fill_plan || {};
         var fields = plan.fields || [];
@@ -231,8 +254,7 @@
   /* ── Answer bank modal ───────────────────────────────── */
 
   function renderAnswerModal() {
-    fetch("/api/answer-bank")
-      .then(function (r) { return r.json(); })
+    apiFetch("/api/answer-bank")
       .then(function (data) {
         var answers = data.answers || [];
         if (!answersList) return;
@@ -272,7 +294,7 @@
       return;
     }
     var key = category + (questionText ? "_" + questionText.toLowerCase().replace(/\W+/g, "_").slice(0, 30) : "");
-    fetch("/api/answer-bank", {
+    apiFetch("/api/answer-bank", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -293,7 +315,7 @@
   }
 
   function deleteAnswer(questionKey) {
-    fetch("/api/answer-bank/" + encodeURIComponent(questionKey) + "/delete", {
+    apiFetch("/api/answer-bank/" + encodeURIComponent(questionKey) + "/delete", {
       method: "POST",
     })
       .then(function () { renderAnswerModal(); })
@@ -390,7 +412,7 @@
 
   window.AQ = {
     markApplied: markApplied,
-    openFolder: openFolder,
+    openPackage: openPackage,
     openAnswers: openAnswers,
     openFillSnippet: openFillSnippet,
     deleteAnswer: deleteAnswer,

@@ -54,6 +54,26 @@
       });
   }
 
+  if (window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas") {
+    if (loadingMsg) loadingMsg.setAttribute("hidden", "");
+    if (tableWrap) tableWrap.setAttribute("hidden", "");
+    if (emptyMsg) {
+      emptyMsg.textContent =
+        "Interview Prep is currently disabled in public SaaS mode.";
+      emptyMsg.removeAttribute("hidden");
+    }
+    if (newBtn) {
+      newBtn.disabled = true;
+      newBtn.title = "Available only in local mode";
+    }
+    window.CustomyInterviewPrep = {
+      refresh: function () {
+        return Promise.resolve();
+      },
+    };
+    return;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return "-";
     var d = new Date(dateStr.replace(" ", "T") + (dateStr.includes("T") ? "" : "Z"));

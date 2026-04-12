@@ -2418,6 +2418,10 @@ body.platform-body {
   z-index: 500;
 }
 
+.jt-modal-overlay[hidden] {
+  display: none;
+}
+
 .jt-modal {
   background: var(--shell-surface);
   border-radius: 14px;
@@ -2647,6 +2651,10 @@ html[data-theme="dark"] .tracker-status--ghosted   { background: rgba(255,255,25
   display: flex;
   justify-content: flex-end;
   animation: drawerFadeIn 160ms ease;
+}
+
+.app-drawer-overlay[hidden] {
+  display: none;
 }
 
 @keyframes drawerFadeIn {

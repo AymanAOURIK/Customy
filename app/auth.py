@@ -1,7 +1,7 @@
 """JWT authentication for Customy V3.
 
-Validates Supabase-issued JWTs using the project JWT secret.
-Extracts user_id and checks admin membership from ADMIN_USER_IDS env var.
+Supports both legacy HS256 JWT-secret verification and the newer Supabase
+JWKS-based signing keys flow.
 """
 
 from __future__ import annotations
@@ -11,8 +11,11 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 import jwt as pyjwt
+from jwt import PyJWKClient
 
 _JWT_SECRET: str | None = None
+_JWKS_URL: str | None = None
+_JWKS_CLIENT: PyJWKClient | None = None
 _ADMIN_USER_IDS: set[str] = set()
 _ADMIN_IDS_LOADED = False
 
@@ -33,6 +36,27 @@ def _get_jwt_secret() -> str:
     return _JWT_SECRET
 
 
+def _get_jwks_url() -> str:
+    global _JWKS_URL
+    if _JWKS_URL is None:
+        explicit = os.environ.get("SUPABASE_JWKS_URL", "").strip()
+        if explicit:
+            _JWKS_URL = explicit
+        else:
+            base_url = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+            if not base_url:
+                raise RuntimeError("Set SUPABASE_URL or SUPABASE_JWKS_URL for JWT verification")
+            _JWKS_URL = f"{base_url}/auth/v1/.well-known/jwks.json"
+    return _JWKS_URL
+
+
+def _get_jwks_client() -> PyJWKClient:
+    global _JWKS_CLIENT
+    if _JWKS_CLIENT is None:
+        _JWKS_CLIENT = PyJWKClient(_get_jwks_url())
+    return _JWKS_CLIENT
+
+
 def _get_admin_ids() -> set[str]:
     global _ADMIN_USER_IDS, _ADMIN_IDS_LOADED
     if not _ADMIN_IDS_LOADED:
@@ -44,19 +68,35 @@ def _get_admin_ids() -> set[str]:
 
 def verify_jwt(token: str) -> dict[str, Any]:
     """Decode and verify a Supabase JWT. Returns the payload dict on success."""
-    secret = _get_jwt_secret()
     try:
-        payload: dict[str, Any] = pyjwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-            options={"verify_exp": True},
-        )
+        header = pyjwt.get_unverified_header(token)
+        algorithm = str(header.get("alg") or "").strip()
+        if not algorithm:
+            raise AuthError("Token missing signing algorithm")
+
+        if algorithm.startswith("HS"):
+            payload: dict[str, Any] = pyjwt.decode(
+                token,
+                _get_jwt_secret(),
+                algorithms=[algorithm],
+                audience="authenticated",
+                options={"verify_exp": True},
+            )
+        else:
+            signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
+            payload = pyjwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[algorithm],
+                audience="authenticated",
+                options={"verify_exp": True},
+            )
     except pyjwt.ExpiredSignatureError:
         raise AuthError("Token has expired")
     except pyjwt.InvalidAudienceError:
         raise AuthError("Invalid token audience")
+    except RuntimeError as exc:
+        raise AuthError(str(exc))
     except pyjwt.InvalidTokenError as exc:
         raise AuthError(f"Invalid token: {exc}")
     return payload

@@ -68,6 +68,9 @@ def insert_application(
     job_application_url: str | None,
     resume_tex_url: str | None,
     resume_pdf_url: str | None,
+    cover_letter_url: str | None,
+    linkedin_msg_url: str | None,
+    email_draft_url: str | None,
     cover_letter: bool,
     linkedin_msg: bool,
     email_draft: bool,
@@ -88,31 +91,31 @@ def insert_application(
                 INSERT INTO applications (
                     user_id, company, role, slug, jd_raw, jd_language, jd_location,
                     job_application_url, job_id,
-                    resume_tex_url, resume_pdf_url,
+                    resume_tex_url, resume_pdf_url, cover_letter_url, linkedin_msg_url, email_draft_url,
                     cover_letter, linkedin_msg, email_draft,
                     tokens_used, model_used, score, initial_score, updated_score,
                     prompt_tokens, cached_prompt_tokens, completion_tokens,
                     input_cost_usd, cached_input_cost_usd, output_cost_usd, total_cost_usd,
-                    api_attempts, pricing_basis
+                    api_attempts, pricing_basis, role_archetype
                 )
                 VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s
                 )
                 RETURNING id
                 """,
                 (
                     user_id, company, role, slug, jd_raw, jd_language, jd_location,
                     job_application_url, job_id,
-                    resume_tex_url, resume_pdf_url,
+                    resume_tex_url, resume_pdf_url, cover_letter_url, linkedin_msg_url, email_draft_url,
                     int(cover_letter), int(linkedin_msg), int(email_draft),
                     tokens_used, model_used, initial_score, initial_score, updated_score,
                     usage.get("prompt_tokens"), usage.get("cached_prompt_tokens"),
                     usage.get("completion_tokens"),
                     usage.get("input_cost_usd"), usage.get("cached_input_cost_usd"),
                     usage.get("output_cost_usd"), usage.get("total_cost_usd"),
-                    usage.get("attempt_count"), usage.get("pricing_basis"),
+                    usage.get("attempt_count"), usage.get("pricing_basis"), archetype,
                 ),
             )
             row = _row(cur)
@@ -221,6 +224,37 @@ def set_duplicate_flag(user_id: str, app_id: int, is_duplicate: bool, detail: st
                 """,
                 (app_id, detail or f"is_duplicate:{old_value}->{new_value}"),
             )
+
+
+def get_application_events(user_id: str, app_id: int) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT e.*
+                FROM events e
+                JOIN applications a ON a.id = e.application_id
+                WHERE e.application_id = %s AND a.user_id = %s
+                ORDER BY e.created_at ASC, e.id ASC
+                """,
+                (app_id, user_id),
+            )
+            return _rows(cur)
+
+
+def update_application_notes(user_id: str, app_id: int, notes: str) -> None:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE applications
+                SET notes = %s
+                WHERE id = %s AND user_id = %s
+                """,
+                (notes.strip() or None, app_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"Application {app_id} not found")
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +504,40 @@ def get_analytics(user_id: str) -> dict[str, Any]:
         "score_distribution": score_dist,
         "score_by_outcome": score_by_outcome,
     }
+
+
+def get_tracker_applications(user_id: str) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    a.*,
+                    COALESCE(last_ev.created_at, a.created_at) AS last_status_at
+                FROM applications a
+                LEFT JOIN (
+                    SELECT application_id, MAX(created_at) AS created_at
+                    FROM events
+                    WHERE event_type = 'status_change'
+                    GROUP BY application_id
+                ) last_ev ON last_ev.application_id = a.id
+                WHERE a.user_id = %s AND COALESCE(a.is_duplicate, 0) = 0
+                ORDER BY
+                    CASE a.status
+                        WHEN 'offer'        THEN 1
+                        WHEN 'interviewing' THEN 2
+                        WHEN 'applied'      THEN 3
+                        WHEN 'generated'    THEN 4
+                        WHEN 'ghosted'      THEN 5
+                        WHEN 'rejected'     THEN 6
+                        ELSE 7
+                    END,
+                    COALESCE(last_ev.created_at, a.created_at) DESC,
+                    a.id DESC
+                """,
+                (user_id,),
+            )
+            return _rows(cur)
 
 
 # ---------------------------------------------------------------------------

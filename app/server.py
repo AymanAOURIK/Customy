@@ -45,16 +45,29 @@ from app.latex import compile_pdf, render_tex
 from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
+from app.storage_cloud import get_signed_url_for_path, upload_pack_files
 from app.targeting import candidate_keywords_from_profile
 import psycopg2.errors as _pg_errors
 from app.auth import AuthError, require_auth
 from app.profile_db import get_profile, profile_to_candidate_context
 from app.db_postgres import (
     application_slug_exists as pg_application_slug_exists,
+    get_analytics as pg_get_analytics,
+    get_application as pg_get_application,
+    get_application_events as pg_get_application_events,
+    get_apply_queue as pg_get_apply_queue,
+    get_daily_stats as pg_get_daily_stats,
+    get_funnel_stats as pg_get_funnel_stats,
+    get_quick_stats as pg_get_quick_stats,
+    get_tracker_applications as pg_get_tracker_applications,
     insert_application as pg_insert_application,
     link_job_to_application,
+    list_applications as pg_list_applications,
     record_api_usage as pg_record_api_usage,
     refresh_daily_stats as pg_refresh_daily_stats,
+    set_duplicate_flag as pg_set_duplicate_flag,
+    update_application_notes as pg_update_application_notes,
+    update_status as pg_update_status,
 )
 from app.routes_auth import handle_auth_me
 from app.routes_jobs import (
@@ -241,16 +254,36 @@ def _open_folder_in_file_manager(path: str, applications_dir: Path) -> None:
         raise ValueError(f"Could not open the application folder: {exc}") from exc
 
 
-def _serialize_files(slug: str, files: dict) -> dict:
+def _serialize_files(slug: str, files: dict, cloud_paths: dict | None = None) -> dict:
+    if cloud_paths:
+        cloud_key_map = {
+            "resume_tex": "resume_tex_url",
+            "resume_pdf": "resume_pdf_url",
+            "cover_letter": "cover_letter_url",
+            "linkedin_message": "linkedin_msg_url",
+            "email_draft": "email_draft_url",
+            "generated_json": "generated_json_url",
+        }
+        response = {"output_dir": {"path": None, "url": None}}
+        for key, path in files.items():
+            if key in {"output_dir", "cover_letter_filename"}:
+                continue
+            stored_path = cloud_paths.get(cloud_key_map.get(key, ""))
+            response[key] = {
+                "path": stored_path,
+                "url": get_signed_url_for_path(stored_path) if stored_path else None,
+            }
+        return response
+
     response = {"output_dir": {"path": files["output_dir"], "url": None}}
     for key, path in files.items():
-        if key == "output_dir":
+        if key in {"output_dir", "cover_letter_filename"}:
             continue
         response[key] = {"path": path, "url": _artifact_url(slug, Path(path).name)}
     return response
 
 
-def _serialize_application(row: dict) -> dict:
+def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
     slug = row.get("slug", "")
     initial_score = row.get("initial_score")
     if initial_score is None:
@@ -258,19 +291,31 @@ def _serialize_application(row: dict) -> dict:
     updated_score = row.get("updated_score")
     current_score = updated_score if updated_score is not None else initial_score
     outputs = {}
-    if row.get("resume_pdf_path"):
-        outputs["resume_pdf"] = _artifact_url(slug, Path(row["resume_pdf_path"]).name)
-    if row.get("resume_tex_path"):
-        outputs["resume_tex"] = _artifact_url(slug, Path(row["resume_tex_path"]).name)
-    if row.get("cover_letter") and row.get("outputs_path"):
-        _cl_matches = sorted(Path(row["outputs_path"]).glob("*Cover_letter.txt"))
-        if _cl_matches:
-            outputs["cover_letter"] = _artifact_url(slug, _cl_matches[0].name)
-    if row.get("linkedin_msg"):
-        outputs["linkedin_message"] = _artifact_url(slug, "linkedin_message.md")
-    if row.get("email_draft"):
-        outputs["email_draft"] = _artifact_url(slug, "email_draft.md")
-    outputs["generated_json"] = _artifact_url(slug, "generated.json")
+    if cloud_mode:
+        if row.get("resume_pdf_url"):
+            outputs["resume_pdf"] = get_signed_url_for_path(str(row["resume_pdf_url"]))
+        if row.get("resume_tex_url"):
+            outputs["resume_tex"] = get_signed_url_for_path(str(row["resume_tex_url"]))
+        if row.get("cover_letter_url"):
+            outputs["cover_letter"] = get_signed_url_for_path(str(row["cover_letter_url"]))
+        if row.get("linkedin_msg_url"):
+            outputs["linkedin_message"] = get_signed_url_for_path(str(row["linkedin_msg_url"]))
+        if row.get("email_draft_url"):
+            outputs["email_draft"] = get_signed_url_for_path(str(row["email_draft_url"]))
+    else:
+        if row.get("resume_pdf_path"):
+            outputs["resume_pdf"] = _artifact_url(slug, Path(row["resume_pdf_path"]).name)
+        if row.get("resume_tex_path"):
+            outputs["resume_tex"] = _artifact_url(slug, Path(row["resume_tex_path"]).name)
+        if row.get("cover_letter") and row.get("outputs_path"):
+            _cl_matches = sorted(Path(row["outputs_path"]).glob("*Cover_letter.txt"))
+            if _cl_matches:
+                outputs["cover_letter"] = _artifact_url(slug, _cl_matches[0].name)
+        if row.get("linkedin_msg"):
+            outputs["linkedin_message"] = _artifact_url(slug, "linkedin_message.md")
+        if row.get("email_draft"):
+            outputs["email_draft"] = _artifact_url(slug, "email_draft.md")
+        outputs["generated_json"] = _artifact_url(slug, "generated.json")
 
     return {
         "id": row.get("id"),
@@ -293,8 +338,10 @@ def _serialize_application(row: dict) -> dict:
         "outputs": outputs,
         "job_application_url": row.get("job_application_url"),
         "notes": row.get("notes") or "",
-        "folder_path": row.get("outputs_path"),
-        "folder_url": f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None,
+        "folder_path": None if cloud_mode else row.get("outputs_path"),
+        "folder_url": None if cloud_mode else (
+            f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None
+        ),
     }
 
 
@@ -357,6 +404,22 @@ def run_server(host: str, port: int, cfg: dict) -> None:
         def log_message(self, format: str, *args) -> None:
             _log.info("%s %s", self.command if hasattr(self, "command") else "-", format % args)
 
+        def _require_saas_user_id(self) -> str | None:
+            if cfg["mode"] != "saas":
+                return None
+            try:
+                user_id, _ = require_auth(self)
+            except AuthError as exc:
+                self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+                return None
+            return user_id
+
+        def _saas_local_only(self, feature_name: str) -> None:
+            self._json(
+                HTTPStatus.NOT_IMPLEMENTED,
+                {"error": f"{feature_name} is not enabled in public SaaS mode yet."},
+            )
+
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
             try:
@@ -396,14 +459,23 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     self._handle_application_events(int(_ev_match.group(1)))
                     return
                 if parsed.path == "/api/answer-bank":
+                    if cfg["mode"] == "saas":
+                        self._saas_local_only("Answer Bank")
+                        return
                     self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
                     return
                 if parsed.path == "/api/interview-prep":
+                    if cfg["mode"] == "saas":
+                        self._saas_local_only("Interview Prep")
+                        return
                     sessions = list_prep_sessions(db_path)
                     self._json(HTTPStatus.OK, {"sessions": sessions})
                     return
                 _prep_get_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
                 if _prep_get_match:
+                    if cfg["mode"] == "saas":
+                        self._saas_local_only("Interview Prep")
+                        return
                     session = get_prep_session(db_path, int(_prep_get_match.group(1)))
                     if not session:
                         self._json(HTTPStatus.NOT_FOUND, {"error": "Prep session not found."})
@@ -440,6 +512,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             parsed = urlparse(self.path)
             open_folder_match = re.fullmatch(r"/api/applications/(\d+)/open-folder", parsed.path)
             if open_folder_match:
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Open folder")
+                    return
                 try:
                     app_id = int(open_folder_match.group(1))
                     row = get_application(db_path, app_id)
@@ -453,6 +528,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
             if parsed.path == "/api/answer-bank":
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Answer Bank")
+                    return
                 try:
                     payload = _read_json(self)
                     question_key = str(payload.get("question_key") or "").strip()
@@ -476,6 +554,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
 
             if parsed.path == "/api/answer-question":
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Answer Bank")
+                    return
                 try:
                     payload = _read_json(self)
                     question = str(payload.get("question") or "").strip().lower()
@@ -514,6 +595,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
 
             if parsed.path.startswith("/api/answer-bank/") and parsed.path.endswith("/delete"):
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Answer Bank")
+                    return
                 try:
                     key = unquote(parsed.path.removeprefix("/api/answer-bank/").removesuffix("/delete"))
                     delete_answer(db_path, key)
@@ -523,6 +607,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
 
             if parsed.path == "/api/apply-assist":
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Apply Assist")
+                    return
                 try:
                     payload = _read_json(self)
                     app_id = payload.get("app_id")
@@ -575,6 +662,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
 
             if parsed.path == "/api/interview-prep":
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Interview Prep")
+                    return
                 try:
                     payload = _read_json(self)
                     company = str(payload.get("company") or "").strip()
@@ -611,6 +701,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
             _prep_delete_match = re.fullmatch(r"/api/interview-prep/(\d+)/delete", parsed.path)
             if _prep_delete_match:
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Interview Prep")
+                    return
                 try:
                     delete_prep_session(db_path, int(_prep_delete_match.group(1)))
                     self._json(HTTPStatus.OK, {"ok": True})
@@ -764,6 +857,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
                     if cfg["mode"] == "saas":
                         try:
+                            cloud_paths = upload_pack_files(user_id, slug, files["output_dir"])
                             app_id = pg_insert_application(
                                 user_id=user_id,
                                 company=company,
@@ -773,8 +867,11 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                                 jd_language=initial_analysis.get("language"),
                                 jd_location=initial_analysis.get("location"),
                                 job_application_url=application_url,
-                                resume_tex_url=_artifact_url(slug, "resume.tex"),
-                                resume_pdf_url=_artifact_url(slug, _pdf_filename) if pdf_path else None,
+                                resume_tex_url=cloud_paths.get("resume_tex_url"),
+                                resume_pdf_url=cloud_paths.get("resume_pdf_url"),
+                                cover_letter_url=cloud_paths.get("cover_letter_url"),
+                                linkedin_msg_url=cloud_paths.get("linkedin_msg_url"),
+                                email_draft_url=cloud_paths.get("email_draft_url"),
                                 cover_letter="cover_letter" in requested_outputs,
                                 linkedin_msg="linkedin_msg" in requested_outputs,
                                 email_draft="email_draft" in requested_outputs,
@@ -843,6 +940,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         request_status="succeeded",
                     )
                     pg_refresh_daily_stats(user_id)
+                    shutil.rmtree(files["output_dir"], ignore_errors=True)
                 else:
                     record_api_usage(
                         db_path,
@@ -872,7 +970,11 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         "initial_analysis": initial_analysis,
                         "updated_analysis": updated_analysis,
                         "pack": pack.model_dump(),
-                        "files": _serialize_files(slug, files),
+                        "files": _serialize_files(
+                            slug,
+                            files,
+                            cloud_paths=cloud_paths if cfg["mode"] == "saas" else None,
+                        ),
                     },
                 )
             except ValueError as exc:
@@ -884,6 +986,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             parsed = urlparse(self.path)
             _prep_patch_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
             if _prep_patch_match:
+                if cfg["mode"] == "saas":
+                    self._saas_local_only("Interview Prep")
+                    return
                 try:
                     session_id = int(_prep_patch_match.group(1))
                     payload = _read_json(self)
@@ -909,10 +1014,19 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     app_id = int(duplicate_match.group(1))
                     is_duplicate = _normalize_bool(payload.get("is_duplicate"), "is_duplicate")
                     detail = str(payload.get("detail", "")).strip()
-                    set_duplicate_flag(db_path, app_id, is_duplicate, detail)
-                    refresh_daily_stats(db_path)
-                    row = get_application(db_path, app_id)
-                    self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
+                    if cfg["mode"] == "saas":
+                        user_id = self._require_saas_user_id()
+                        if user_id is None:
+                            return
+                        pg_set_duplicate_flag(user_id, app_id, is_duplicate, detail)
+                        pg_refresh_daily_stats(user_id)
+                        row = pg_get_application(user_id, app_id)
+                        self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                    else:
+                        set_duplicate_flag(db_path, app_id, is_duplicate, detail)
+                        refresh_daily_stats(db_path)
+                        row = get_application(db_path, app_id)
+                        self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
                 except ValueError as exc:
                     self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 except Exception as exc:
@@ -926,9 +1040,17 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     payload = _read_json(self)
                     app_id = int(_notes_match.group(1))
                     notes = str(payload.get("notes", "")).strip()
-                    update_application_notes(db_path, app_id, notes)
-                    row = get_application(db_path, app_id)
-                    self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
+                    if cfg["mode"] == "saas":
+                        user_id = self._require_saas_user_id()
+                        if user_id is None:
+                            return
+                        pg_update_application_notes(user_id, app_id, notes)
+                        row = pg_get_application(user_id, app_id)
+                        self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                    else:
+                        update_application_notes(db_path, app_id, notes)
+                        row = get_application(db_path, app_id)
+                        self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
                 except ValueError as exc:
                     self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 except Exception as exc:
@@ -945,10 +1067,19 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 detail = str(payload.get("detail", "")).strip()
                 if not new_status:
                     raise ValueError("Field 'new_status' is required.")
-                update_status(db_path, app_id, new_status, detail)
-                refresh_daily_stats(db_path)
-                row = get_application(db_path, app_id)
-                self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
+                if cfg["mode"] == "saas":
+                    user_id = self._require_saas_user_id()
+                    if user_id is None:
+                        return
+                    pg_update_status(user_id, app_id, new_status, detail)
+                    pg_refresh_daily_stats(user_id)
+                    row = pg_get_application(user_id, app_id)
+                    self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                else:
+                    update_status(db_path, app_id, new_status, detail)
+                    refresh_daily_stats(db_path)
+                    row = get_application(db_path, app_id)
+                    self._json(HTTPStatus.OK, {"application": _serialize_application(row)})
             except ValueError as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
@@ -1001,42 +1132,79 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             from urllib.parse import parse_qs
             params = parse_qs(query_string or "")
             min_score = float((params.get("min_score") or ["0"])[0])
-            rows = get_apply_queue(db_path, min_score=min_score)
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                rows = pg_get_apply_queue(user_id, min_score=min_score)
+            else:
+                rows = get_apply_queue(db_path, min_score=min_score)
             apps = []
             for row in rows:
-                serialized = _serialize_application(row)
+                serialized = _serialize_application(row, cloud_mode=cfg["mode"] == "saas")
                 serialized["archetype"] = row.get("role_archetype") or "general"
                 apps.append(serialized)
             self._json(HTTPStatus.OK, {"applications": apps, "count": len(apps)})
 
         def _handle_analytics(self) -> None:
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                self._json(HTTPStatus.OK, pg_get_analytics(user_id))
+                return
             self._json(HTTPStatus.OK, get_analytics(db_path))
 
         def _handle_tracker(self) -> None:
-            rows = get_tracker_applications(db_path)
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                rows = pg_get_tracker_applications(user_id)
+            else:
+                rows = get_tracker_applications(db_path)
             self._json(
                 HTTPStatus.OK,
                 {
                     "items": [
-                        {**_serialize_application(row), "last_status_at": row.get("last_status_at")}
+                        {
+                            **_serialize_application(row, cloud_mode=cfg["mode"] == "saas"),
+                            "last_status_at": row.get("last_status_at"),
+                        }
                         for row in rows
                     ],
                 },
             )
 
         def _handle_application_events(self, app_id: int) -> None:
-            row = get_application(db_path, app_id)
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                row = pg_get_application(user_id, app_id)
+                events = pg_get_application_events(user_id, app_id)
+            else:
+                row = get_application(db_path, app_id)
+                events = get_application_events(db_path, app_id)
             if not row:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Application not found."})
                 return
-            events = get_application_events(db_path, app_id)
             self._json(HTTPStatus.OK, {"application_id": app_id, "events": events})
 
         def _handle_stats(self) -> None:
-            refresh_daily_stats(db_path)
-            funnel = get_funnel_stats(db_path)
-            daily_stats = get_daily_stats(db_path, days=30)
-            quick_stats = get_quick_stats(db_path)
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                pg_refresh_daily_stats(user_id)
+                funnel = pg_get_funnel_stats(user_id)
+                daily_stats = pg_get_daily_stats(user_id, days=30)
+                quick_stats = pg_get_quick_stats(user_id)
+            else:
+                refresh_daily_stats(db_path)
+                funnel = get_funnel_stats(db_path)
+                daily_stats = get_daily_stats(db_path, days=30)
+                quick_stats = get_quick_stats(db_path)
             self._json(
                 HTTPStatus.OK,
                 {
@@ -1051,11 +1219,17 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             limit = int(params.get("limit", ["50"])[0])
             offset = int(params.get("offset", ["0"])[0])
             status = params.get("status", [""])[0] or None
-            items = list_applications(db_path, status_filter=status, limit=limit, offset=offset)
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                items = pg_list_applications(user_id, status_filter=status, limit=limit, offset=offset)
+            else:
+                items = list_applications(db_path, status_filter=status, limit=limit, offset=offset)
             self._json(
                 HTTPStatus.OK,
                 {
-                    "items": [_serialize_application(item) for item in items],
+                    "items": [_serialize_application(item, cloud_mode=cfg["mode"] == "saas") for item in items],
                     "limit": limit,
                     "offset": offset,
                     "status": status,

@@ -1,7 +1,7 @@
 """Supabase Storage adapter for Customy V3 (SaaS mode).
 
 Artifacts are stored under: artifacts/<user_id>/<slug>/<filename>
-Access is via signed URLs valid for 1 hour.
+Persistent storage paths are saved in Postgres; signed URLs are minted on read.
 """
 
 from __future__ import annotations
@@ -56,16 +56,23 @@ def upload_file(user_id: str, slug: str, filename: str, local_path: str) -> str:
 
 def get_signed_url(user_id: str, slug: str, filename: str) -> str:
     """Return a short-lived signed URL for a stored artifact."""
+    return get_signed_url_for_path(_storage_path(user_id, slug, filename))
+
+
+def get_signed_url_for_path(path: str) -> str:
+    """Return a short-lived signed URL for an existing storage object path."""
     client = _get_client()
-    path = _storage_path(user_id, slug, filename)
-    response = client.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_TTL)
+    normalized = str(path or "").strip().lstrip("/")
+    if not normalized:
+        raise ValueError("Storage path is required")
+    response = client.storage.from_(BUCKET).create_signed_url(normalized, SIGNED_URL_TTL)
     return response["signedURL"]
 
 
 def upload_pack_files(user_id: str, slug: str, local_dir: str) -> dict[str, str]:
     """Upload all artifact files from a local pack directory.
 
-    Returns a dict mapping artifact key to signed URL:
+    Returns a dict mapping artifact key to storage path:
       {
         "resume_tex_url": "...",
         "resume_pdf_url": "...",   # only if PDF exists
@@ -76,21 +83,21 @@ def upload_pack_files(user_id: str, slug: str, local_dir: str) -> dict[str, str]
       }
     """
     base = Path(local_dir)
-    urls: dict[str, str] = {}
+    stored: dict[str, str] = {}
 
-    _upload_if_exists(user_id, slug, base, "resume.tex", "resume_tex_url", urls)
-    _upload_if_exists(user_id, slug, base, "resume.pdf", "resume_pdf_url", urls)
-    _upload_if_exists(user_id, slug, base, "generated.json", "generated_json_url", urls)
-    _upload_if_exists(user_id, slug, base, "linkedin_message.md", "linkedin_msg_url", urls)
-    _upload_if_exists(user_id, slug, base, "email_draft.md", "email_draft_url", urls)
+    _upload_if_exists(user_id, slug, base, "resume.tex", "resume_tex_url", stored)
+    _upload_first_matching(user_id, slug, base, "*.pdf", "resume_pdf_url", stored)
+    _upload_if_exists(user_id, slug, base, "generated.json", "generated_json_url", stored)
+    _upload_if_exists(user_id, slug, base, "linkedin_message.md", "linkedin_msg_url", stored)
+    _upload_if_exists(user_id, slug, base, "email_draft.md", "email_draft_url", stored)
 
     # cover letter filename varies: <Name>_Cover_letter.txt
     for path in base.glob("*_Cover_letter.txt"):
         storage_path = upload_file(user_id, slug, path.name, str(path))
-        urls["cover_letter_url"] = get_signed_url(user_id, slug, path.name)
+        stored["cover_letter_url"] = storage_path
         break
 
-    return urls
+    return stored
 
 
 def _upload_if_exists(
@@ -99,12 +106,25 @@ def _upload_if_exists(
     base: Path,
     filename: str,
     key: str,
-    urls: dict[str, str],
+    stored: dict[str, str],
 ) -> None:
     local = base / filename
     if local.exists():
-        upload_file(user_id, slug, filename, str(local))
-        urls[key] = get_signed_url(user_id, slug, filename)
+        stored[key] = upload_file(user_id, slug, filename, str(local))
+
+
+def _upload_first_matching(
+    user_id: str,
+    slug: str,
+    base: Path,
+    pattern: str,
+    key: str,
+    stored: dict[str, str],
+) -> None:
+    for local in sorted(base.glob(pattern)):
+        if local.is_file():
+            stored[key] = upload_file(user_id, slug, local.name, str(local))
+            return
 
 
 def _guess_content_type(suffix: str) -> str:
