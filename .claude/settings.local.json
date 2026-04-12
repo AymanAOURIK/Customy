@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(/mnt/c/Users/LENOVO/desktop/Customy output job applications/**)"
+      "Read(/mnt/c/Users/LENOVO/desktop/Customy output job applications/**)",
+      "Bash(grep -E \"\\\\.py$|\\\\.yaml$|\\\\.yml$|\\\\.md$\")"
     ]
   }
 }

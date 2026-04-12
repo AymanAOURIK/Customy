@@ -33,11 +33,19 @@ def _slugify_text(text: str) -> str:
     return slug or "untitled"
 
 
-def make_slug(company: str, role: str, db_path: str | None = None) -> str:
+def make_slug(
+    company: str,
+    role: str,
+    db_path: str | None = None,
+    slug_exists_fn=None,
+) -> str:
     """
     "Acme Corp" + "Data Engineer" -> "acme-corp-data-engineer-20240601"
     URL-safe, lowercase, hyphens only.
     If the configured output folder or database slug already exists, append -2, -3, etc.
+
+    slug_exists_fn: optional callable(slug: str) -> bool for external slug checks
+                    (e.g. Postgres in SaaS mode). Takes precedence alongside db_path.
     """
 
     applications_dir = _configured_applications_dir()
@@ -46,7 +54,11 @@ def make_slug(company: str, role: str, db_path: str | None = None) -> str:
     dated_slug = f"{company_slug}-{role_slug}-{datetime.now().strftime('%Y%m%d')}"
     candidate = dated_slug
     index = 2
-    while (applications_dir / candidate).exists() or (db_path and application_slug_exists(db_path, candidate)):
+    while (
+        (applications_dir / candidate).exists()
+        or (db_path and application_slug_exists(db_path, candidate))
+        or (slug_exists_fn and slug_exists_fn(candidate))
+    ):
         candidate = f"{dated_slug}-{index}"
         index += 1
     return candidate

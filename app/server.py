@@ -38,6 +38,15 @@ from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
 from app.targeting import candidate_keywords_from_profile
+import psycopg2.errors as _pg_errors
+from app.auth import AuthError, require_auth
+from app.profile_db import get_profile, profile_to_candidate_context
+from app.db_postgres import (
+    application_slug_exists as pg_application_slug_exists,
+    insert_application as pg_insert_application,
+    record_api_usage as pg_record_api_usage,
+    refresh_daily_stats as pg_refresh_daily_stats,
+)
 from app.routes_auth import handle_auth_me
 from app.routes_profile import handle_profile_create, handle_profile_get, handle_profile_update
 from app.routes_admin import (
@@ -470,7 +479,27 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     raise ValueError("Field 'jd' is required.")
                 application_url = _normalize_application_url(payload.get("application_url"))
                 requested_outputs = _normalize_outputs(payload.get("outputs"))
-                candidate_context = build_candidate_context(candidate_yaml_path)
+
+                # ── Candidate context: DB profile (saas) or candidate.yaml (local) ──
+                user_id: str | None = None
+                if cfg["mode"] == "saas":
+                    try:
+                        user_id, _ = require_auth(self)
+                    except AuthError as exc:
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+                        return
+                    profile = get_profile(user_id)
+                    if not profile:
+                        self._json(
+                            HTTPStatus.UNPROCESSABLE_ENTITY,
+                            {"error": "Profile not found. Create one via POST /api/profile first."},
+                        )
+                        return
+                    candidate_context = profile_to_candidate_context(profile)
+                else:
+                    candidate_context = build_candidate_context(candidate_yaml_path)
+                # ─────────────────────────────────────────────────────────────────────
+
                 initial_analysis = analyze_jd(
                     jd_text,
                     _candidate_keywords(candidate_context),
@@ -505,13 +534,22 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     )
                 except PackGenerationError as exc:
                     if exc.usage_summary.get("attempts"):
-                        record_api_usage(
-                            db_path,
-                            exc.usage_summary["attempts"],
-                            application_id=None,
-                            request_status="failed",
-                            error_message=str(exc),
-                        )
+                        if cfg["mode"] == "saas":
+                            pg_record_api_usage(
+                                user_id,
+                                exc.usage_summary["attempts"],
+                                application_id=None,
+                                request_status="failed",
+                                error_message=str(exc),
+                            )
+                        else:
+                            record_api_usage(
+                                db_path,
+                                exc.usage_summary["attempts"],
+                                application_id=None,
+                                request_status="failed",
+                                error_message=str(exc),
+                            )
                     raise ValueError(str(exc)) from exc
 
                 updated_analysis = analyze_jd(
@@ -526,7 +564,14 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 tex_string = render_tex(candidate_context, pack, initial_analysis)
                 last_slug_error = ""
                 for _ in range(8):
-                    slug = make_slug(company, role, db_path=db_path)
+                    if cfg["mode"] == "saas":
+                        _uid = user_id
+                        slug = make_slug(
+                            company, role,
+                            slug_exists_fn=lambda s: pg_application_slug_exists(_uid, s),
+                        )
+                    else:
+                        slug = make_slug(company, role, db_path=db_path)
                     _cand_name = candidate_context.get("personal", {}).get("name") or "Candidate"
                     _pdf_filename = re.sub(r"\s+", "_", _cand_name.strip()) + "_Resume.pdf"
                     try:
@@ -555,46 +600,87 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     if pdf_path:
                         files["resume_pdf"] = pdf_path
 
-                    try:
-                        app_id = insert_application(
-                            db_path=db_path,
-                            company=company,
-                            role=role,
-                            slug=slug,
-                            jd_raw=jd_text,
-                            jd_language=initial_analysis.get("language"),
-                            jd_location=initial_analysis.get("location"),
-                            job_application_url=application_url,
-                            outputs_path=files["output_dir"],
-                            resume_tex_path=files["resume_tex"],
-                            resume_pdf_path=files.get("resume_pdf"),
-                            cover_letter="cover_letter" in requested_outputs,
-                            linkedin_msg="linkedin_msg" in requested_outputs,
-                            email_draft="email_draft" in requested_outputs,
-                            tokens_used=tokens_used,
-                            model_used=model_used,
-                            initial_score=float(initial_analysis.get("score") or 0.0),
-                            updated_score=float(updated_analysis.get("score") or 0.0),
-                            usage_summary=usage_summary,
-                            archetype=initial_analysis.get("archetype"),
-                        )
-                        break
-                    except sqlite3.IntegrityError as exc:
-                        if "applications.slug" not in str(exc).lower() and "applications.slug" not in repr(exc).lower():
+                    if cfg["mode"] == "saas":
+                        try:
+                            app_id = pg_insert_application(
+                                user_id=user_id,
+                                company=company,
+                                role=role,
+                                slug=slug,
+                                jd_raw=jd_text,
+                                jd_language=initial_analysis.get("language"),
+                                jd_location=initial_analysis.get("location"),
+                                job_application_url=application_url,
+                                resume_tex_url=_artifact_url(slug, "resume.tex"),
+                                resume_pdf_url=_artifact_url(slug, _pdf_filename) if pdf_path else None,
+                                cover_letter="cover_letter" in requested_outputs,
+                                linkedin_msg="linkedin_msg" in requested_outputs,
+                                email_draft="email_draft" in requested_outputs,
+                                tokens_used=tokens_used,
+                                model_used=model_used,
+                                initial_score=float(initial_analysis.get("score") or 0.0),
+                                updated_score=float(updated_analysis.get("score") or 0.0),
+                                usage_summary=usage_summary,
+                                archetype=initial_analysis.get("archetype"),
+                            )
+                            break
+                        except Exception as exc:
+                            if isinstance(exc, _pg_errors.UniqueViolation):
+                                last_slug_error = str(exc)
+                                continue
                             raise
-                        last_slug_error = str(exc)
-                        continue
+                    else:
+                        try:
+                            app_id = insert_application(
+                                db_path=db_path,
+                                company=company,
+                                role=role,
+                                slug=slug,
+                                jd_raw=jd_text,
+                                jd_language=initial_analysis.get("language"),
+                                jd_location=initial_analysis.get("location"),
+                                job_application_url=application_url,
+                                outputs_path=files["output_dir"],
+                                resume_tex_path=files["resume_tex"],
+                                resume_pdf_path=files.get("resume_pdf"),
+                                cover_letter="cover_letter" in requested_outputs,
+                                linkedin_msg="linkedin_msg" in requested_outputs,
+                                email_draft="email_draft" in requested_outputs,
+                                tokens_used=tokens_used,
+                                model_used=model_used,
+                                initial_score=float(initial_analysis.get("score") or 0.0),
+                                updated_score=float(updated_analysis.get("score") or 0.0),
+                                usage_summary=usage_summary,
+                                archetype=initial_analysis.get("archetype"),
+                            )
+                            break
+                        except sqlite3.IntegrityError as exc:
+                            if "applications.slug" not in str(exc).lower() and "applications.slug" not in repr(exc).lower():
+                                raise
+                            last_slug_error = str(exc)
+                            continue
                 else:
                     raise ValueError(
                         last_slug_error or "Could not allocate a unique application slug after multiple attempts."
                     )
-                record_api_usage(
-                    db_path,
-                    usage_summary.get("attempts", []),
-                    application_id=app_id,
-                    request_status="succeeded",
-                )
-                refresh_daily_stats(db_path)
+
+                if cfg["mode"] == "saas":
+                    pg_record_api_usage(
+                        user_id,
+                        usage_summary.get("attempts", []),
+                        application_id=app_id,
+                        request_status="succeeded",
+                    )
+                    pg_refresh_daily_stats(user_id)
+                else:
+                    record_api_usage(
+                        db_path,
+                        usage_summary.get("attempts", []),
+                        application_id=app_id,
+                        request_status="succeeded",
+                    )
+                    refresh_daily_stats(db_path)
+
                 self._json(
                     HTTPStatus.OK,
                     {
