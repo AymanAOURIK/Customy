@@ -2335,3 +2335,183 @@ body.platform-body {
 .profile-editor-status--saving  { color: var(--shell-text-muted, #888); }
 .profile-editor-status--success  { color: var(--shell-success, #2d6f4b); }
 .profile-editor-status--error    { color: var(--shell-danger,  #9a3e31); }
+
+/* ── Job Tracker (WT6) ───────────────────────────────── */
+
+.jt-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--shell-border);
+  margin-bottom: 16px;
+}
+
+.jt-tab {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--shell-border);
+  background: transparent;
+  color: var(--shell-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.jt-tab:hover {
+  background: var(--shell-surface-soft);
+}
+
+.jt-tab.active {
+  background: var(--shell-accent);
+  color: var(--shell-on-accent);
+  border-color: var(--shell-accent);
+}
+
+.jt-state-msg {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--shell-text-soft);
+  font-size: 0.875rem;
+}
+
+.jt-actions {
+  white-space: nowrap;
+}
+
+.jt-action-link {
+  font-size: 0.8rem;
+  color: var(--shell-accent);
+  text-decoration: none;
+  margin-right: 8px;
+}
+
+.jt-action-link:hover {
+  text-decoration: underline;
+}
+
+.jt-delete-btn {
+  background: none;
+  border: none;
+  color: var(--shell-text-soft);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 120ms ease;
+  vertical-align: middle;
+}
+
+.jt-delete-btn:hover {
+  color: var(--shell-danger, #9a3e31);
+}
+
+/* Modal */
+
+.jt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.jt-modal {
+  background: var(--shell-surface);
+  border-radius: 14px;
+  border: 1px solid var(--shell-border);
+  padding: 28px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.18);
+}
+
+.jt-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.jt-modal-header h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--shell-text-strong);
+}
+
+.jt-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--shell-text-soft);
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: color 120ms ease;
+}
+
+.jt-modal-close:hover {
+  color: var(--shell-text);
+}
+
+.jt-field {
+  margin-bottom: 14px;
+}
+
+.jt-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--shell-text-btn);
+  margin-bottom: 5px;
+}
+
+.jt-field input,
+.jt-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-surface-soft);
+  color: var(--shell-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 120ms ease;
+}
+
+.jt-field input:focus,
+.jt-field textarea:focus {
+  outline: none;
+  border-color: var(--shell-accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.jt-field textarea {
+  resize: vertical;
+}
+
+.jt-form-error {
+  color: var(--shell-danger, #9a3e31);
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+}
+
+.jt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .jt-modal {
+    padding: 20px 16px;
+    max-width: calc(100vw - 24px);
+  }
+}
