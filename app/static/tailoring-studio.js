@@ -251,7 +251,7 @@
     generateBtn.disabled = true;
     setStatus("Generating tailored materials...", "loading");
 
-    fetch("/api/generate", {
+    CAuth.authFetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
