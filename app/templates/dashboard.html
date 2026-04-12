@@ -728,14 +728,65 @@
             <div class="page-header">
               <div>
                 <h1>Interview Prep</h1>
-                <p>Prepare for upcoming interviews</p>
+                <p>Practice questions and STAR stories, linked to your applications</p>
+              </div>
+              <div class="page-header-actions">
+                <button class="btn-primary" id="ip-new-btn">+ New Session</button>
               </div>
             </div>
+
+            <!-- KPI bar -->
+            <div class="kpi-grid" id="ip-kpi-grid"></div>
+
+            <!-- Sessions list -->
             <div class="shell-card">
-              <div class="placeholder-section">
-                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <h3 class="placeholder-title">Interview Prep</h3>
-                <p class="placeholder-text">Company briefs, practice questions, and STAR stories. Coming soon.</p>
+              <div id="ip-loading" class="tracker-state-msg">Loading&hellip;</div>
+              <div id="ip-empty" class="tracker-state-msg" hidden>No prep sessions yet. Click <strong>+ New Session</strong> to get started.</div>
+              <div class="shell-table-wrap" id="ip-table-wrap" hidden>
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Company</th>
+                      <th>Role</th>
+                      <th>Created</th>
+                      <th>Questions</th>
+                      <th>Answered</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ip-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- New Session Modal -->
+            <div id="ip-modal" class="jt-modal-overlay" hidden>
+              <div class="jt-modal">
+                <div class="jt-modal-header">
+                  <h3>New Prep Session</h3>
+                  <button class="jt-modal-close" id="ip-modal-close" type="button" aria-label="Close">&#x2715;</button>
+                </div>
+                <form id="ip-form" novalidate>
+                  <div class="jt-field">
+                    <label for="ip-f-app">Link to Application <span style="font-weight:400;color:var(--shell-text-soft)">(optional — auto-fills company &amp; role)</span></label>
+                    <select id="ip-f-app" class="jt-select">
+                      <option value="">— None —</option>
+                    </select>
+                  </div>
+                  <div class="jt-field">
+                    <label for="ip-f-company">Company</label>
+                    <input type="text" id="ip-f-company" placeholder="e.g. Acme Corp" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="ip-f-role">Role *</label>
+                    <input type="text" id="ip-f-role" placeholder="e.g. Senior Data Scientist" />
+                  </div>
+                  <p id="ip-form-error" class="jt-form-error" hidden></p>
+                  <div class="jt-modal-actions">
+                    <button type="button" class="btn-secondary" id="ip-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn-primary" id="ip-submit">Create &amp; Generate Questions</button>
+                  </div>
+                </form>
               </div>
             </div>
           </section>
@@ -1220,6 +1271,46 @@
       </div>
     </div>
 
+    <!-- ── Interview Prep Session Drawer ────────────────────────────────── -->
+    <div id="ip-drawer-overlay" class="app-drawer-overlay" hidden>
+      <div id="ip-drawer" class="app-drawer" role="dialog" aria-modal="true">
+        <div class="app-drawer-header">
+          <div class="app-drawer-title-group">
+            <div class="app-drawer-company" id="ip-drawer-company"></div>
+            <div class="app-drawer-role" id="ip-drawer-role"></div>
+          </div>
+          <button class="app-drawer-close" id="ip-drawer-close" aria-label="Close">&times;</button>
+        </div>
+
+        <!-- Notes -->
+        <div class="app-drawer-notes-section">
+          <div class="app-drawer-timeline-header">Session Notes</div>
+          <textarea
+            id="ip-drawer-notes"
+            class="app-drawer-notes-textarea"
+            rows="3"
+            placeholder="Add notes about this prep session&hellip;"
+          ></textarea>
+          <div class="app-drawer-notes-actions">
+            <span id="ip-notes-saved" class="app-drawer-notes-saved" hidden>Saved</span>
+            <button id="ip-notes-save-btn" class="btn-primary">Save Notes</button>
+          </div>
+        </div>
+
+        <!-- Questions -->
+        <div class="app-drawer-timeline-header" style="margin-top:16px">
+          Questions
+          <span id="ip-progress-label" style="margin-left:8px;font-size:0.75rem;font-weight:400;color:var(--shell-text-soft)"></span>
+        </div>
+        <div id="ip-questions-list" style="display:flex;flex-direction:column;gap:10px;margin-top:8px"></div>
+
+        <!-- Delete -->
+        <div style="padding:16px 0 4px;border-top:1px solid var(--shell-border);margin-top:16px;text-align:right">
+          <button id="ip-delete-session-btn" style="font-size:0.8rem;padding:5px 12px;border:1px solid var(--shell-danger-border-soft,rgba(220,38,38,.18));background:var(--shell-danger-soft);color:var(--shell-danger);border-radius:6px;cursor:pointer">Delete Session</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/theme-toggle.js"></script>
     <script src="/static/utils.js"></script>
     <!-- auth.js must load before dashboard-shell so CAuth.authFetch is available -->
@@ -1234,6 +1325,7 @@
     <script src="/static/profile-editor.js" defer></script>
     <script src="/static/job-tracker.js" defer></script>
     <script src="/static/tracker.js" defer></script>
+    <script src="/static/interview-prep.js" defer></script>
     <!-- Supabase JS SDK (SaaS mode only; harmless in local mode) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="/static/auth-ui.js" defer></script>
