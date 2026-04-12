@@ -633,3 +633,67 @@ def get_answer_by_key(db_path: str, question_key: str) -> dict | None:
             "SELECT * FROM answer_bank WHERE question_key = ?", (question_key,)
         ).fetchone()
     return dict(row) if row else None
+
+
+# ── Tracking dashboard ───────────────────────────────────────────────────────
+
+
+def get_application_events(db_path: str, app_id: int) -> list[dict]:
+    """Returns all events for an application, oldest first."""
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM events
+            WHERE application_id = ?
+            ORDER BY datetime(created_at) ASC
+            """,
+            (app_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_application_notes(db_path: str, app_id: int, notes: str) -> None:
+    """Overwrites the notes field for an application."""
+    with _connect(db_path) as conn:
+        row = conn.execute("SELECT id FROM applications WHERE id = ?", (app_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"Application {app_id} does not exist.")
+        conn.execute(
+            "UPDATE applications SET notes = ? WHERE id = ?",
+            (notes.strip() or None, app_id),
+        )
+
+
+def get_tracker_applications(db_path: str) -> list[dict]:
+    """Returns all non-duplicate applications with last status-change timestamp.
+
+    Ordered by status priority (offer first) then by last activity descending.
+    """
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                a.*,
+                COALESCE(last_ev.created_at, a.created_at) AS last_status_at
+            FROM applications a
+            LEFT JOIN (
+                SELECT application_id, MAX(created_at) AS created_at
+                FROM events
+                WHERE event_type = 'status_change'
+                GROUP BY application_id
+            ) last_ev ON last_ev.application_id = a.id
+            WHERE COALESCE(a.is_duplicate, 0) = 0
+            ORDER BY
+                CASE a.status
+                    WHEN 'offer'        THEN 1
+                    WHEN 'interviewing' THEN 2
+                    WHEN 'applied'      THEN 3
+                    WHEN 'generated'    THEN 4
+                    WHEN 'ghosted'      THEN 5
+                    WHEN 'rejected'     THEN 6
+                    ELSE 7
+                END,
+                datetime(COALESCE(last_ev.created_at, a.created_at)) DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
