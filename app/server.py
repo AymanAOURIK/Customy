@@ -259,10 +259,10 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             parsed = urlparse(self.path)
             try:
                 if parsed.path == "/":
-                    self._serve_file(TEMPLATES_DIR / "dashboard.html", "text/html; charset=utf-8")
+                    self._serve_dashboard()
                     return
                 if parsed.path == "/dashboard":
-                    self._serve_file(TEMPLATES_DIR / "dashboard.html", "text/html; charset=utf-8")
+                    self._serve_dashboard()
                     return
                 if parsed.path.startswith("/static/"):
                     filename = parsed.path.removeprefix("/static/")
@@ -746,6 +746,30 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     "status": status,
                 },
             )
+
+        def _serve_dashboard(self) -> None:
+            """Serve dashboard.html with an injected CUSTOMY_CONFIG script block."""
+            path = TEMPLATES_DIR / "dashboard.html"
+            html = path.read_bytes().decode("utf-8")
+            if cfg["mode"] == "saas":
+                supabase_url = cfg.get("supabase", {}).get("url", "")
+                anon_key = cfg.get("supabase", {}).get("anon_key", "")
+                config_script = (
+                    "<script>window.CUSTOMY_CONFIG = {"
+                    'mode: "saas", '
+                    "supabaseUrl: " + json.dumps(supabase_url) + ", "
+                    "supabaseAnonKey: " + json.dumps(anon_key) +
+                    "};</script>"
+                )
+            else:
+                config_script = '<script>window.CUSTOMY_CONFIG = {mode: "local"};</script>'
+            html = html.replace("<!-- __CUSTOMY_CONFIG__ -->", config_script, 1)
+            body = html.encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _serve_static(self, filename: str) -> None:
             path = (STATIC_DIR / filename).resolve()
