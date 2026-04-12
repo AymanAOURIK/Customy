@@ -71,6 +71,12 @@
             Profile Intelligence
           </a>
 
+          <div class="sidebar-section-label" id="sidebar-admin-group" hidden>Admin</div>
+          <a class="sidebar-link" href="#admin" data-section="section-admin" id="sidebar-admin-link" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Admin
+          </a>
+
           <div class="sidebar-section-label">Manage</div>
           <a class="sidebar-link" href="#profile-editor" data-section="section-profile-editor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -878,6 +884,196 @@
             </div>
           </section>
 
+          <!-- ═══════════════════════════════════════════ -->
+          <!-- ADMIN DASHBOARD                             -->
+          <!-- ═══════════════════════════════════════════ -->
+          <section id="section-admin" class="platform-section">
+            <div class="page-header">
+              <div>
+                <h1>Admin</h1>
+                <p>Platform overview and management</p>
+              </div>
+              <div class="page-header-actions">
+                <button class="btn-secondary" id="admin-refresh-btn">Refresh</button>
+              </div>
+            </div>
+
+            <!-- Platform Stats -->
+            <div class="shell-card shell-card--spaced">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Platform Stats</h3>
+                  <p class="shell-card-subtitle">Live aggregates across all users</p>
+                </div>
+              </div>
+              <div class="quick-stats-grid" id="admin-stats-grid">
+                <div class="quick-stat-card">
+                  <div class="quick-stat-label">Waiting for data&hellip;</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Users List -->
+            <div class="shell-card">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Users</h3>
+                  <p class="shell-card-subtitle">All registered accounts</p>
+                </div>
+              </div>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Name</th>
+                      <th>Joined</th>
+                      <th>Last Sign-in</th>
+                      <th>Apps</th>
+                      <th>Last Gen</th>
+                      <th>Cost</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-users-body">
+                    <tr><td colspan="8" class="aq-empty-row">Waiting for data&hellip;</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- User Detail Panel (hidden until a user is selected) -->
+            <div class="shell-card" id="admin-user-detail" hidden>
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title" id="admin-detail-title">User Detail</h3>
+                  <p class="shell-card-subtitle" id="admin-detail-email"></p>
+                </div>
+                <button class="btn-secondary" id="admin-detail-close">Close</button>
+              </div>
+              <div class="quick-stats-grid" id="admin-detail-stats-grid" style="margin-bottom:16px"></div>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Company</th>
+                      <th>Role</th>
+                      <th>Score</th>
+                      <th>Cost</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-detail-apps-body">
+                    <tr><td colspan="6" class="aq-empty-row">Select a user to view detail.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Ideas Board -->
+            <div class="shell-card">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Ideas Board</h3>
+                  <p class="shell-card-subtitle">Feature ideas, bugs, and planned work</p>
+                </div>
+                <div class="page-header-actions">
+                  <select id="admin-ideas-filter" class="aq-select">
+                    <option value="">All statuses</option>
+                    <option value="idea">Idea</option>
+                    <option value="planned">Planned</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="done">Done</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                  <button class="btn-primary" id="admin-idea-new-btn">+ New Idea</button>
+                </div>
+              </div>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Category</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>Version</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-ideas-body">
+                    <tr><td colspan="7" class="aq-empty-row">Waiting for data&hellip;</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Idea create/edit modal -->
+            <div class="aq-modal-overlay" id="admin-idea-modal-overlay">
+              <div class="aq-modal">
+                <div class="aq-modal-header">
+                  <div>
+                    <h3 class="aq-modal-title" id="admin-idea-modal-title">New Idea</h3>
+                  </div>
+                  <button class="aq-modal-close" id="admin-idea-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="aq-modal-body">
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="admin-idea-title">Title <span class="pe-required">*</span></label>
+                    <input id="admin-idea-title" type="text" class="pe-input" placeholder="Idea title" />
+                  </div>
+                  <div class="pe-field pe-field--full">
+                    <label class="pe-label" for="admin-idea-desc">Description</label>
+                    <textarea id="admin-idea-desc" class="pe-textarea" rows="3" placeholder="Details&hellip;"></textarea>
+                  </div>
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="admin-idea-category">Category</label>
+                      <select id="admin-idea-category" class="aq-select">
+                        <option value="">None</option>
+                        <option value="feature">Feature</option>
+                        <option value="bug">Bug</option>
+                        <option value="improvement">Improvement</option>
+                        <option value="infra">Infra</option>
+                      </select>
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="admin-idea-priority">Priority</label>
+                      <select id="admin-idea-priority" class="aq-select">
+                        <option value="">None</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="pe-row">
+                    <div class="pe-field">
+                      <label class="pe-label" for="admin-idea-status">Status</label>
+                      <select id="admin-idea-status" class="aq-select">
+                        <option value="idea">Idea</option>
+                        <option value="planned">Planned</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="done">Done</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                    <div class="pe-field">
+                      <label class="pe-label" for="admin-idea-version">Target Version</label>
+                      <input id="admin-idea-version" type="text" class="pe-input" placeholder="e.g. v3.1" />
+                    </div>
+                  </div>
+                  <div class="pe-actions">
+                    <button type="button" id="admin-idea-save-btn" class="btn-primary">Save</button>
+                    <span id="admin-idea-modal-error" class="auth-msg auth-msg--error"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
         </div>
       </div>
     </div>
@@ -927,6 +1123,7 @@
     <!-- Supabase JS SDK (SaaS mode only; harmless in local mode) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="/static/auth-ui.js" defer></script>
+    <script src="/static/admin-dashboard.js" defer></script>
     <script>
       /* Auth bootstrap — runs after all deferred scripts have loaded */
       window.addEventListener("load", function () {
@@ -974,10 +1171,31 @@
             if (window.CustomyDashboard) CustomyDashboard.refresh();
             if (window.CProfileEditor) CProfileEditor.init();
             if (window.CJobTracker) CJobTracker.init();
+
+            /* Check admin status and reveal admin section if authorised */
+            CAuth.authFetch("/api/auth/me")
+              .then(function (r) { return r.json(); })
+              .then(function (me) {
+                var adminLink  = document.getElementById("sidebar-admin-link");
+                var adminGroup = document.getElementById("sidebar-admin-group");
+                if (me.is_admin) {
+                  if (adminLink)  adminLink.removeAttribute("hidden");
+                  if (adminGroup) adminGroup.removeAttribute("hidden");
+                  if (window.CAdminDashboard) CAdminDashboard.init();
+                } else {
+                  if (adminLink)  adminLink.setAttribute("hidden", "");
+                  if (adminGroup) adminGroup.setAttribute("hidden", "");
+                }
+              })
+              .catch(function () { /* non-critical — admin link stays hidden */ });
           } else {
-            /* Signed out — show login overlay */
+            /* Signed out — show login overlay, hide admin link */
             if (window.CAuthUI) CAuthUI.show();
             if (logoutBtn) logoutBtn.setAttribute("hidden", "");
+            var adminLink  = document.getElementById("sidebar-admin-link");
+            var adminGroup = document.getElementById("sidebar-admin-group");
+            if (adminLink)  adminLink.setAttribute("hidden", "");
+            if (adminGroup) adminGroup.setAttribute("hidden", "");
           }
         });
       });
