@@ -135,6 +135,17 @@ def init_db(db_path: str) -> None:
                 total_cost_usd        REAL,
                 pricing_basis         TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS interview_prep (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                application_id  INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                company         TEXT    NOT NULL DEFAULT '',
+                role            TEXT    NOT NULL DEFAULT '',
+                questions_json  TEXT    NOT NULL DEFAULT '[]',
+                notes           TEXT
+            );
             """
         )
         _ensure_columns(conn, "applications", APPLICATION_EXTRA_COLUMNS)
@@ -662,6 +673,97 @@ def update_application_notes(db_path: str, app_id: int, notes: str) -> None:
             "UPDATE applications SET notes = ? WHERE id = ?",
             (notes.strip() or None, app_id),
         )
+
+
+# ── Interview Prep ─────────────────────────────────────────────────────────
+
+
+def create_prep_session(
+    db_path: str,
+    *,
+    application_id: int | None,
+    company: str,
+    role: str,
+    questions: list[dict],
+) -> int:
+    """Creates a new interview prep session and returns its id."""
+    with _connect(db_path) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO interview_prep (application_id, company, role, questions_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                application_id,
+                company.strip(),
+                role.strip(),
+                json.dumps(questions, ensure_ascii=False),
+            ),
+        )
+        return int(cursor.lastrowid)
+
+
+def list_prep_sessions(db_path: str) -> list[dict]:
+    """Returns all prep sessions newest-first, with linked application info."""
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT ip.*,
+                   a.company AS app_company,
+                   a.role    AS app_role,
+                   a.status  AS app_status
+            FROM interview_prep ip
+            LEFT JOIN applications a ON a.id = ip.application_id
+            ORDER BY datetime(ip.created_at) DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_prep_session(db_path: str, session_id: int) -> dict | None:
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM interview_prep WHERE id = ?", (session_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def update_prep_session(
+    db_path: str,
+    session_id: int,
+    *,
+    questions: list[dict] | None = None,
+    notes: str | None = None,
+) -> None:
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT id FROM interview_prep WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Prep session {session_id} does not exist.")
+        if questions is not None:
+            conn.execute(
+                """
+                UPDATE interview_prep
+                SET questions_json = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (json.dumps(questions, ensure_ascii=False), session_id),
+            )
+        if notes is not None:
+            conn.execute(
+                """
+                UPDATE interview_prep
+                SET notes = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (notes.strip() or None, session_id),
+            )
+
+
+def delete_prep_session(db_path: str, session_id: int) -> None:
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM interview_prep WHERE id = ?", (session_id,))
 
 
 def get_tracker_applications(db_path: str) -> list[dict]:

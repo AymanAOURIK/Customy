@@ -15,7 +15,9 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from app.analyzer import analyze_jd, build_updated_resume_keywords
 from app.db import (
+    create_prep_session,
     delete_answer,
+    delete_prep_session,
     get_analytics,
     get_answer_bank,
     get_answer_by_key,
@@ -24,14 +26,17 @@ from app.db import (
     get_apply_queue,
     get_daily_stats,
     get_funnel_stats,
+    get_prep_session,
     get_quick_stats,
     get_tracker_applications,
     insert_application,
     list_applications,
+    list_prep_sessions,
     record_api_usage,
     refresh_daily_stats,
     set_duplicate_flag,
     update_application_notes,
+    update_prep_session,
     update_status,
     upsert_answer,
 )
@@ -70,6 +75,83 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = PROJECT_ROOT / "app" / "templates"
 STATIC_DIR = PROJECT_ROOT / "app" / "static"
 ALLOWED_OUTPUTS = {"resume", "cover_letter", "linkedin_msg", "email_draft"}
+
+# ── Interview prep question templates ─────────────────────────────────────
+
+_PREP_BEHAVIORAL: list[tuple[str, str]] = [
+    ("Tell me about a time you led a technical project end-to-end.", "behavioral"),
+    ("Describe a situation where you had to make a decision with incomplete information.", "behavioral"),
+    ("Give an example of a time you persuaded stakeholders of a technical direction.", "behavioral"),
+    ("Tell me about a time you failed and what you learned from it.", "behavioral"),
+    ("Describe a time you worked under tight deadlines. How did you manage priorities?", "behavioral"),
+    ("Tell me about a time you mentored or helped a colleague grow professionally.", "behavioral"),
+]
+
+_PREP_TECHNICAL: dict[str, list[str]] = {
+    "ai_platform": [
+        "How do you design an ML pipeline for production reliability?",
+        "What is your approach to model monitoring and drift detection?",
+        "Walk me through how you would set up an MLOps stack from scratch.",
+        "How do you handle data quality issues in a production ML pipeline?",
+    ],
+    "agentic": [
+        "Explain how you would design an agentic system with tool use and memory.",
+        "What are the key failure modes of LLM-based autonomous agents?",
+        "How do you evaluate a RAG pipeline's accuracy and reliability in production?",
+        "How would you approach prompt engineering for a complex multi-step agent?",
+    ],
+    "ai_pm": [
+        "How do you define success metrics for an AI-powered product feature?",
+        "Describe how you would prioritize ML model improvements against other features.",
+        "How do you communicate technical AI limitations to non-technical stakeholders?",
+        "Walk me through your process for gathering requirements for an AI feature.",
+    ],
+    "ai_architect": [
+        "How do you evaluate different vector database solutions for a RAG system?",
+        "What are your considerations when designing a multi-model AI architecture?",
+        "How do you approach scalability in a real-time ML inference system?",
+        "Describe your approach to AI system observability and debugging.",
+    ],
+    "ai_forward_deployed": [
+        "How do you approach understanding a new client's technical environment?",
+        "Describe how you would demo an AI product to a skeptical technical audience.",
+        "How do you handle customer escalations about AI output quality?",
+        "How do you translate customer feedback into actionable product requirements?",
+    ],
+    "ai_transformation": [
+        "How have you driven AI adoption across teams that were initially resistant?",
+        "Describe your approach to building an internal AI capability roadmap.",
+        "How do you measure the ROI of an AI transformation initiative?",
+        "What change management techniques do you apply when rolling out AI tools?",
+    ],
+    "general": [
+        "Walk me through your experience with data pipelines and ETL processes.",
+        "How do you approach system design for a data-intensive application?",
+        "Describe your debugging process when a production system is slow or failing.",
+        "How do you stay current with rapidly evolving technologies in your field?",
+    ],
+}
+
+_PREP_SITUATIONAL: list[str] = [
+    "If you joined this team tomorrow, what would your first 30 days look like?",
+    "How would you handle a situation where a key model in production starts underperforming?",
+    "Imagine you have been given a poorly documented legacy codebase. How do you approach it?",
+]
+
+
+def _generate_prep_questions(archetype: str | None) -> list[dict]:
+    """Returns a starter question set based on role archetype. No LLM required."""
+    import uuid
+    arch = str(archetype or "general").lower()
+    tech = _PREP_TECHNICAL.get(arch, _PREP_TECHNICAL["general"])
+    questions: list[dict] = []
+    for text, cat in _PREP_BEHAVIORAL[:4]:
+        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": cat, "answer": "", "confidence": ""})
+    for text in tech[:4]:
+        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": "technical", "answer": "", "confidence": ""})
+    for text in _PREP_SITUATIONAL[:2]:
+        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": "situational", "answer": "", "confidence": ""})
+    return questions
 
 _log = logging.getLogger(__name__)
 
@@ -316,6 +398,18 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 if parsed.path == "/api/answer-bank":
                     self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
                     return
+                if parsed.path == "/api/interview-prep":
+                    sessions = list_prep_sessions(db_path)
+                    self._json(HTTPStatus.OK, {"sessions": sessions})
+                    return
+                _prep_get_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
+                if _prep_get_match:
+                    session = get_prep_session(db_path, int(_prep_get_match.group(1)))
+                    if not session:
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "Prep session not found."})
+                        return
+                    self._json(HTTPStatus.OK, {"session": session})
+                    return
                 if cfg["mode"] == "saas":
                     if parsed.path == "/api/auth/me":
                         handle_auth_me(self, cfg)
@@ -476,6 +570,50 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     })
                 except ValueError as exc:
                     self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            if parsed.path == "/api/interview-prep":
+                try:
+                    payload = _read_json(self)
+                    company = str(payload.get("company") or "").strip()
+                    role = str(payload.get("role") or "").strip()
+                    raw_app_id = payload.get("application_id")
+                    application_id: int | None = int(raw_app_id) if raw_app_id is not None else None
+                    archetype: str | None = None
+                    if application_id is not None:
+                        app_row = get_application(db_path, application_id)
+                        if not app_row:
+                            raise ValueError(f"Application {application_id} not found.")
+                        if not company:
+                            company = str(app_row.get("company") or "")
+                        if not role:
+                            role = str(app_row.get("role") or "")
+                        archetype = app_row.get("role_archetype")
+                    if not role:
+                        raise ValueError("Field 'role' is required.")
+                    questions = _generate_prep_questions(archetype)
+                    session_id = create_prep_session(
+                        db_path,
+                        application_id=application_id,
+                        company=company,
+                        role=role,
+                        questions=questions,
+                    )
+                    session = get_prep_session(db_path, session_id)
+                    self._json(HTTPStatus.CREATED, {"session": session})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            _prep_delete_match = re.fullmatch(r"/api/interview-prep/(\d+)/delete", parsed.path)
+            if _prep_delete_match:
+                try:
+                    delete_prep_session(db_path, int(_prep_delete_match.group(1)))
+                    self._json(HTTPStatus.OK, {"ok": True})
                 except Exception as exc:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
@@ -744,6 +882,26 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
         def do_PATCH(self) -> None:
             parsed = urlparse(self.path)
+            _prep_patch_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
+            if _prep_patch_match:
+                try:
+                    session_id = int(_prep_patch_match.group(1))
+                    payload = _read_json(self)
+                    questions = payload.get("questions")
+                    notes = payload.get("notes")
+                    update_prep_session(
+                        db_path,
+                        session_id,
+                        questions=questions if isinstance(questions, list) else None,
+                        notes=str(notes) if notes is not None else None,
+                    )
+                    session = get_prep_session(db_path, session_id)
+                    self._json(HTTPStatus.OK, {"session": session})
+                except ValueError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                except Exception as exc:
+                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
             duplicate_match = re.fullmatch(r"/api/applications/(\d+)/duplicate", parsed.path)
             if duplicate_match:
                 try:
