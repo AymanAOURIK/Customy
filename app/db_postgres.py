@@ -635,3 +635,21 @@ def link_job_to_application(user_id: str, job_id: int, application_id: int) -> N
                 """,
                 (application_id, job_id, user_id),
             )
+
+
+def update_job_notes(user_id: str, job_id: int, notes: str | None) -> None:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET notes = %s WHERE id = %s AND user_id = %s",
+                (notes, job_id, user_id),
+            )
+
+
+def delete_job(user_id: str, job_id: int) -> None:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM jobs WHERE id = %s AND user_id = %s",
+                (job_id, user_id),
+            )

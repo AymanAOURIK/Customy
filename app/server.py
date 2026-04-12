@@ -44,10 +44,17 @@ from app.profile_db import get_profile, profile_to_candidate_context
 from app.db_postgres import (
     application_slug_exists as pg_application_slug_exists,
     insert_application as pg_insert_application,
+    link_job_to_application,
     record_api_usage as pg_record_api_usage,
     refresh_daily_stats as pg_refresh_daily_stats,
 )
 from app.routes_auth import handle_auth_me
+from app.routes_jobs import (
+    dispatch_jobs_delete,
+    dispatch_jobs_get,
+    dispatch_jobs_patch,
+    dispatch_jobs_post,
+)
 from app.routes_profile import handle_profile_create, handle_profile_get, handle_profile_update
 from app.routes_admin import (
     dispatch_admin_delete,
@@ -305,6 +312,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     if parsed.path == "/api/profile":
                         handle_profile_get(self, cfg)
                         return
+                    if dispatch_jobs_get(self, parsed.path, cfg):
+                        return
                     if parsed.path.startswith("/api/admin/"):
                         if dispatch_admin_get(self, parsed.path, cfg):
                             return
@@ -464,6 +473,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 if parsed.path == "/api/profile":
                     handle_profile_create(self, cfg)
                     return
+                if dispatch_jobs_post(self, parsed.path, cfg):
+                    return
                 if parsed.path.startswith("/api/admin/"):
                     if dispatch_admin_post(self, parsed.path, cfg):
                         return
@@ -479,6 +490,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     raise ValueError("Field 'jd' is required.")
                 application_url = _normalize_application_url(payload.get("application_url"))
                 requested_outputs = _normalize_outputs(payload.get("outputs"))
+                _raw_job_id = payload.get("job_id")
+                job_id_for_app: int | None = int(_raw_job_id) if _raw_job_id is not None else None
 
                 # ── Candidate context: DB profile (saas) or candidate.yaml (local) ──
                 user_id: str | None = None
@@ -622,6 +635,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                                 updated_score=float(updated_analysis.get("score") or 0.0),
                                 usage_summary=usage_summary,
                                 archetype=initial_analysis.get("archetype"),
+                                job_id=job_id_for_app,
                             )
                             break
                         except Exception as exc:
@@ -665,6 +679,14 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     )
 
                 if cfg["mode"] == "saas":
+                    if job_id_for_app:
+                        try:
+                            link_job_to_application(user_id, job_id_for_app, app_id)
+                        except Exception:
+                            _log.warning(
+                                "Failed to link job %s to application %s",
+                                job_id_for_app, app_id,
+                            )
                     pg_record_api_usage(
                         user_id,
                         usage_summary.get("attempts", []),
@@ -727,6 +749,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 except Exception as exc:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
+            if cfg["mode"] == "saas" and dispatch_jobs_patch(self, parsed.path, cfg):
+                return
             match = re.fullmatch(r"/api/applications/(\d+)/status", parsed.path)
             if not match:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -769,6 +793,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
             parsed = urlparse(self.path)
             try:
+                if dispatch_jobs_delete(self, parsed.path, cfg):
+                    return
                 if parsed.path.startswith("/api/admin/"):
                     if dispatch_admin_delete(self, parsed.path, cfg):
                         return

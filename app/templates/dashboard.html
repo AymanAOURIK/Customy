@@ -563,14 +563,99 @@
             <div class="page-header">
               <div>
                 <h1>Job Tracker</h1>
-                <p>Track applications across your pipeline</p>
+                <p>Save and manage jobs you're interested in</p>
+              </div>
+              <div class="page-header-actions">
+                <button class="btn-primary" id="jt-add-btn" hidden>+ Add Job</button>
               </div>
             </div>
-            <div class="shell-card">
+
+            <!-- Local-mode gate -->
+            <div id="jt-local-notice" class="shell-card" hidden>
               <div class="placeholder-section">
                 <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-                <h3 class="placeholder-title">Job Tracker</h3>
-                <p class="placeholder-text">A kanban and table view for all your tracked applications. Coming soon.</p>
+                <h3 class="placeholder-title">SaaS mode required</h3>
+                <p class="placeholder-text">Job management is available in SaaS mode only.</p>
+              </div>
+            </div>
+
+            <!-- Main content (shown after auth confirmed in SaaS) -->
+            <div id="jt-main" class="shell-card" hidden>
+              <!-- Filter bar -->
+              <div class="jt-filter-bar" id="jt-filter-bar">
+                <button class="jt-tab active" data-status="">All</button>
+                <button class="jt-tab" data-status="saved">Saved</button>
+                <button class="jt-tab" data-status="applied">Applied</button>
+                <button class="jt-tab" data-status="interviewing">Interviewing</button>
+                <button class="jt-tab" data-status="offer">Offer</button>
+                <button class="jt-tab" data-status="rejected">Rejected</button>
+                <button class="jt-tab" data-status="ghosted">Ghosted</button>
+                <button class="jt-tab" data-status="archived">Archived</button>
+              </div>
+
+              <div id="jt-loading" class="jt-state-msg" hidden>Loading…</div>
+              <div id="jt-empty" class="jt-state-msg" hidden>No jobs found. Click <strong>+ Add Job</strong> to get started.</div>
+
+              <div class="shell-table-wrap" id="jt-table-wrap" hidden>
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Company</th>
+                      <th>Location</th>
+                      <th>Status</th>
+                      <th>Score</th>
+                      <th>Added</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="jt-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Add Job Modal -->
+            <div id="jt-modal" class="jt-modal-overlay" hidden>
+              <div class="jt-modal">
+                <div class="jt-modal-header">
+                  <h3>Add Job</h3>
+                  <button class="jt-modal-close" id="jt-modal-close" type="button" aria-label="Close">&#x2715;</button>
+                </div>
+                <form id="jt-form" novalidate>
+                  <div class="jt-field">
+                    <label for="jt-f-title">Job Title *</label>
+                    <input type="text" id="jt-f-title" placeholder="e.g. Senior Software Engineer" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-company">Company</label>
+                    <input type="text" id="jt-f-company" placeholder="e.g. Acme Corp" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-url">Job URL</label>
+                    <input type="text" id="jt-f-url" placeholder="https://…" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-location">Location</label>
+                    <input type="text" id="jt-f-location" placeholder="e.g. Paris, France" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-salary">Salary</label>
+                    <input type="text" id="jt-f-salary" placeholder="e.g. 70–90k EUR" />
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-description">Job Description *</label>
+                    <textarea id="jt-f-description" rows="6" placeholder="Paste the job description here…"></textarea>
+                  </div>
+                  <div class="jt-field">
+                    <label for="jt-f-notes">Notes</label>
+                    <textarea id="jt-f-notes" rows="2" placeholder="Personal notes…"></textarea>
+                  </div>
+                  <p id="jt-form-error" class="jt-form-error" hidden></p>
+                  <div class="jt-modal-actions">
+                    <button type="button" class="btn-secondary" id="jt-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn-primary" id="jt-submit">Save Job</button>
+                  </div>
+                </form>
               </div>
             </div>
           </section>
@@ -838,6 +923,7 @@
     <script src="/static/profile-intelligence-data.js" defer></script>
     <script src="/static/profile-intelligence.js" defer></script>
     <script src="/static/profile-editor.js" defer></script>
+    <script src="/static/job-tracker.js" defer></script>
     <!-- Supabase JS SDK (SaaS mode only; harmless in local mode) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="/static/auth-ui.js" defer></script>
@@ -849,6 +935,7 @@
         /* ── Local mode: init profile editor with local notice ── */
         if (cfg.mode !== "saas") {
           if (window.CProfileEditor) CProfileEditor.init();
+          if (window.CJobTracker) CJobTracker.init();
           return;
         }
 
@@ -886,6 +973,7 @@
             if (logoutBtn) logoutBtn.removeAttribute("hidden");
             if (window.CustomyDashboard) CustomyDashboard.refresh();
             if (window.CProfileEditor) CProfileEditor.init();
+            if (window.CJobTracker) CJobTracker.init();
           } else {
             /* Signed out — show login overlay */
             if (window.CAuthUI) CAuthUI.show();
