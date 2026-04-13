@@ -127,6 +127,29 @@ def _upload_first_matching(
             return
 
 
+def upload_bytes_at_path(
+    storage_path: str,
+    data: bytes,
+    content_type: str = "application/octet-stream",
+) -> str:
+    """Upload raw bytes to an explicit storage path within the artifacts bucket.
+
+    Unlike upload_bytes(), this function accepts a fully-formed path string
+    rather than constructing one from user_id/slug/filename segments.
+    Used for resume uploads whose path structure differs from application artifacts.
+
+    Returns the normalized storage path.
+    """
+    client = _get_client()
+    normalized = storage_path.strip("/")
+    client.storage.from_(BUCKET).upload(
+        normalized,
+        data,
+        file_options={"content-type": content_type, "upsert": "true"},
+    )
+    return normalized
+
+
 def _guess_content_type(suffix: str) -> str:
     mapping = {
         ".tex": "text/plain",

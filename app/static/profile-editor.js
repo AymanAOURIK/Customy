@@ -217,5 +217,5 @@
     _loadProfile();
   }
 
-  window.CProfileEditor = { init: init };
+  window.CProfileEditor = { init: init, populate: _populateForm };
 })();

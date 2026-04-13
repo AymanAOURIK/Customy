@@ -868,6 +868,51 @@
               </div>
             </div>
 
+            <!-- ── Onboarding: upload panel ───────────────────────────── -->
+            <!-- Shown by onboarding.js when no profile and no draft exist -->
+            <div id="onboarding-upload-panel" class="shell-card" hidden>
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Set Up Your Profile</h3>
+                  <p class="shell-card-subtitle">Upload your resume and we'll extract your profile automatically.</p>
+                </div>
+              </div>
+              <div style="padding: 0 1.5rem 1.5rem;">
+                <label class="pe-label" for="onboarding-file-input" style="margin-bottom: 0.4rem; display: block;">Resume file <span class="pe-field-type">.pdf &middot; .txt &middot; .md</span></label>
+                <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                  <input id="onboarding-file-input" type="file" accept=".pdf,.txt,.md" style="flex: 1; min-width: 0;" />
+                  <button id="onboarding-upload-btn" class="btn-primary" style="white-space: nowrap;">Upload Resume</button>
+                </div>
+                <div id="onboarding-upload-status" class="onboarding-status" style="margin-top: 0.6rem;"></div>
+              </div>
+              <div style="padding: 0 1.5rem 1.5rem;">
+                <hr class="pe-divider" />
+                <p class="pe-json-hint">Or skip the upload and fill in your profile manually using the form below.</p>
+              </div>
+            </div>
+
+            <!-- ── Onboarding: draft ready panel ─────────────────────── -->
+            <!-- Shown by onboarding.js after a successful upload + extraction -->
+            <div id="onboarding-draft-panel" class="shell-card" hidden>
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Resume Extracted</h3>
+                  <p class="shell-card-subtitle">We've parsed your resume. Review the summary and pre-fill the form below.</p>
+                </div>
+                <span style="display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; background: var(--color-success-bg, #d1fae5); color: var(--color-success, #065f46); font-size: 0.75rem; font-weight: 600;">Draft Ready</span>
+              </div>
+              <div style="padding: 0 1.5rem 0.5rem;">
+                <div id="onboarding-draft-summary" style="line-height: 1.8; margin-bottom: 1rem;"></div>
+                <button id="onboarding-prefill-btn" class="btn-primary" style="margin-bottom: 0.75rem;" hidden>Pre-fill My Profile Form</button>
+                <br>
+                <button id="onboarding-reupload-btn" style="background: none; border: none; color: var(--text-muted, #6b7280); font-size: 0.82rem; cursor: pointer; padding: 0; text-decoration: underline;">Upload a different resume</button>
+              </div>
+              <div style="padding: 0 1.5rem 1.5rem;">
+                <hr class="pe-divider" />
+                <p class="pe-json-hint">Review the form below, make any edits, then click <strong>Create Profile</strong> to activate generation.</p>
+              </div>
+            </div>
+
             <!-- Form wrap — shown in SaaS mode by profile-editor.js -->
             <div id="profile-editor-form-wrap" hidden>
               <div class="shell-card">
@@ -1330,6 +1375,7 @@
     <!-- Supabase JS SDK (SaaS mode only; harmless in local mode) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="/static/auth-ui.js" defer></script>
+    <script src="/static/onboarding.js" defer></script>
     <script src="/static/admin-dashboard.js" defer></script>
     <script>
       /* Auth bootstrap — runs after all deferred scripts have loaded */
@@ -1370,6 +1416,7 @@
               if (r.status === 404) {
                 document.body.classList.add("profile-gate");
                 if (window.CustomyDashboard) CustomyDashboard.navigateTo("section-profile-editor");
+                if (window.COnboarding) COnboarding.init();
               } else {
                 document.body.classList.remove("profile-gate");
               }

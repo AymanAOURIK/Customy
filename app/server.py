@@ -8,6 +8,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -45,7 +46,15 @@ from app.latex import compile_pdf, render_tex
 from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
-from app.storage_cloud import get_signed_url_for_path, upload_pack_files
+from app.storage_cloud import get_signed_url_for_path, upload_bytes_at_path, upload_pack_files
+from app.resume_parser import extract_text as extract_resume_text
+from app.onboarding import extract_draft as onboarding_extract_draft
+from app.onboarding_db import (
+    get_onboarding_draft as get_onboarding_draft_db,
+    insert_resume_upload,
+    update_resume_upload_parsed,
+    upsert_onboarding_draft,
+)
 from app.targeting import candidate_keywords_from_profile
 import psycopg2.errors as _pg_errors
 from app.auth import AuthError, require_auth
@@ -394,6 +403,72 @@ def _updated_resume_keywords(pack: object, jd_analysis: dict, candidate_context:
     return keywords
 
 
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes]:
+    """Parse a multipart/form-data upload request.
+
+    Extracts the field named 'file' and returns (filename, file_bytes).
+    Raises ValueError on any validation failure so the caller can return 400.
+    """
+    content_type = handler.headers.get("Content-Type", "")
+    if not content_type.lower().startswith("multipart/form-data"):
+        raise ValueError("Expected multipart/form-data content type")
+
+    # Extract the boundary token
+    boundary: bytes | None = None
+    for segment in content_type.split(";"):
+        segment = segment.strip()
+        if segment.lower().startswith("boundary="):
+            boundary = segment[len("boundary="):].strip().strip('"').encode("ascii")
+            break
+    if not boundary:
+        raise ValueError("Malformed Content-Type: missing boundary")
+
+    content_length = int(handler.headers.get("Content-Length", 0) or 0)
+    if content_length <= 0:
+        raise ValueError("Empty request body")
+    if content_length > _MAX_UPLOAD_BYTES:
+        handler.rfile.read(content_length)  # drain to keep connection healthy
+        raise ValueError("File too large. Maximum allowed size is 5 MB.")
+
+    body = handler.rfile.read(content_length)
+    sep = b"--" + boundary
+
+    for raw_part in body.split(sep):
+        # Skip preamble, epilogue, and the closing "--" marker
+        if raw_part in (b"", b"--\r\n", b"--", b"\r\n"):
+            continue
+        header_end = raw_part.find(b"\r\n\r\n")
+        if header_end == -1:
+            continue
+
+        headers_block = raw_part[:header_end].lstrip(b"\r\n")
+        part_body = raw_part[header_end + 4:]
+        # Strip the trailing \r\n that precedes the next boundary delimiter
+        if part_body.endswith(b"\r\n"):
+            part_body = part_body[:-2]
+
+        field_name: str | None = None
+        filename: str | None = None
+        for raw_header in headers_block.split(b"\r\n"):
+            header_str = raw_header.decode("utf-8", errors="replace")
+            if not header_str.lower().startswith("content-disposition:"):
+                continue
+            for token in header_str.split(";"):
+                token = token.strip()
+                if token.lower().startswith("name="):
+                    field_name = token[5:].strip().strip('"')
+                elif token.lower().startswith("filename="):
+                    filename = token[9:].strip().strip('"')
+
+        if field_name == "file" and filename:
+            return filename, part_body
+
+    raise ValueError("No 'file' field found in the upload")
+
+
 def run_server(host: str, port: int, cfg: dict) -> None:
     set_applications_dir(cfg["paths"]["applications_dir"])
     applications_dir = Path(cfg["paths"]["applications_dir"]).resolve()
@@ -491,6 +566,18 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         return
                     if parsed.path == "/api/profile":
                         handle_profile_get(self, cfg)
+                        return
+                    if parsed.path == "/api/onboarding/draft":
+                        try:
+                            user_id, _ = require_auth(self)
+                        except AuthError as exc:
+                            self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+                            return
+                        draft = get_onboarding_draft_db(user_id)
+                        if draft is None:
+                            self._json(HTTPStatus.NOT_FOUND, {"error": "no_draft"})
+                            return
+                        self._json(HTTPStatus.OK, draft)
                         return
                     if dispatch_jobs_get(self, parsed.path, cfg):
                         return
@@ -715,6 +802,53 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
 
             if cfg["mode"] == "saas":
+                if parsed.path == "/api/resume/upload":
+                    try:
+                        user_id, _ = require_auth(self)
+                    except AuthError as exc:
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+                        return
+                    try:
+                        filename, file_bytes = _parse_upload_file(self)
+                    except ValueError as exc:
+                        self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                        return
+                    lower_name = filename.lower()
+                    if not (lower_name.endswith(".pdf") or lower_name.endswith(".txt") or lower_name.endswith(".md")):
+                        self._json(HTTPStatus.BAD_REQUEST, {"error": "Only .pdf, .txt, and .md files are accepted."})
+                        return
+                    upload_uuid = str(uuid.uuid4())
+                    storage_path = f"{user_id}/resumes/{upload_uuid}/{filename}"
+                    ct = "application/pdf" if lower_name.endswith(".pdf") else "text/plain"
+                    try:
+                        upload_bytes_at_path(storage_path, file_bytes, ct)
+                    except Exception as exc:
+                        _log.exception("Storage upload failed for user %s", user_id)
+                        self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Storage upload failed: {exc}"})
+                        return
+                    upload_row = insert_resume_upload(user_id, storage_path, filename, len(file_bytes))
+                    upload_id = str(upload_row["id"])
+                    try:
+                        parsed_text = extract_resume_text(file_bytes, filename)
+                        update_resume_upload_parsed(upload_id, parsed_text)
+                    except ValueError as exc:
+                        update_resume_upload_parsed(upload_id, None, parse_error=str(exc))
+                        self._json(HTTPStatus.UNPROCESSABLE_ENTITY, {"error": "resume_parse_failed", "detail": str(exc)})
+                        return
+                    try:
+                        draft_data, gap_analysis = onboarding_extract_draft(parsed_text, cfg)
+                    except ValueError as exc:
+                        _log.exception("Draft extraction failed for user %s", user_id)
+                        self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "extract_failed", "detail": str(exc)})
+                        return
+                    draft_row = upsert_onboarding_draft(user_id, upload_id, draft_data, gap_analysis)
+                    self._json(HTTPStatus.OK, {
+                        "upload_id": upload_id,
+                        "draft_status": draft_row.get("status", "draft"),
+                        "draft_data": draft_data,
+                        "gap_analysis": gap_analysis,
+                    })
+                    return
                 if parsed.path == "/api/profile":
                     handle_profile_create(self, cfg)
                     return

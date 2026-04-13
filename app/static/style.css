@@ -2127,6 +2127,24 @@ body.profile-gate #studio-generate-btn {
   cursor: not-allowed;
 }
 
+/* ── Onboarding panels ───────────────────────────────────── */
+
+.onboarding-status {
+  font-size: 0.85rem;
+  min-height: 1.2em;
+}
+.onboarding-status--info  { color: var(--text-muted, #6b7280); }
+.onboarding-status--error { color: var(--color-danger, #dc2626); }
+
+.onboarding-warning {
+  color: var(--color-warning, #b45309);
+  font-size: 0.85rem;
+}
+.onboarding-note {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.82rem;
+}
+
 /* ── Auth overlay ────────────────────────────────────────── */
 
 .auth-overlay {
