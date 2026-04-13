@@ -21,7 +21,13 @@ nano .env
 # → add OPENAI_API_KEY=your_key
 
 # 8. Run app
-python main.py
+pkill -f "python3 main.py"
+
+set -a
+source .env
+set +a
+
+python3 main.py --host 0.0.0.0 --port 8080
 
 # 9. Push Code to github
 git status --short --branch

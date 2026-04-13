@@ -53,6 +53,23 @@ def _rows(cursor: psycopg2.extensions.cursor) -> list[dict[str, Any]]:
     return [dict(r) for r in cursor.fetchall()]
 
 
+def _coerce_bool(value: Any) -> bool:
+    """Normalize insert/update flags to real Python booleans for Postgres."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n", "off", ""}:
+            return False
+    return bool(value)
+
+
 # ---------------------------------------------------------------------------
 # Applications
 # ---------------------------------------------------------------------------
@@ -109,7 +126,7 @@ def insert_application(
                     user_id, company, role, slug, jd_raw, jd_language, jd_location,
                     job_application_url, job_id,
                     resume_tex_url, resume_pdf_url, cover_letter_url, linkedin_msg_url, email_draft_url,
-                    int(cover_letter), int(linkedin_msg), int(email_draft),
+                    _coerce_bool(cover_letter), _coerce_bool(linkedin_msg), _coerce_bool(email_draft),
                     tokens_used, model_used, initial_score, initial_score, updated_score,
                     usage.get("prompt_tokens"), usage.get("cached_prompt_tokens"),
                     usage.get("completion_tokens"),
