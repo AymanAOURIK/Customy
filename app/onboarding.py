@@ -15,6 +15,8 @@ import logging
 import os
 from typing import Any
 
+from app.text_utils import sanitize_text
+
 _log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,10 @@ def extract_draft(
         ValueError if the API call fails or returns unparseable output.
     """
     from openai import OpenAI
+
+    parsed_text = sanitize_text(parsed_text, preserve_newlines=True)
+    if not parsed_text:
+        raise ValueError("Resume text is empty after sanitization")
 
     model = (
         config.get("llm", {}).get("analysis_model")

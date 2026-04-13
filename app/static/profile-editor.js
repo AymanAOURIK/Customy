@@ -6,10 +6,10 @@
  *                            is confirmed, or immediately in local mode to show
  *                            the gated notice.
  *
- * GET /api/profile  → 200 populate form in update mode
- *                  → 404 show empty form in create mode
+ * GET /api/profile  → 200 { exists:true,  profile } populate form in update mode
+ *                  → 200 { exists:false, profile } show prefilled create mode
  * POST /api/profile → create
- * PUT  /api/profile → update
+ * PUT  /api/profile → update or upsert
  *
  * All API calls use CAuth.authFetch() so the JWT is injected automatically.
  */
@@ -29,6 +29,13 @@
     el.textContent = msg;
     el.className = "profile-editor-status" +
       (type ? " profile-editor-status--" + type : "");
+  }
+
+  function _normalizeProfileResponse(body) {
+    if (body && typeof body === "object" && Object.prototype.hasOwnProperty.call(body, "exists")) {
+      return body;
+    }
+    return { exists: true, profile: body || {} };
   }
 
   function _getFormData() {
@@ -97,21 +104,13 @@
     });
   }
 
-  function _setCreateMode() {
+  function _setCreateMode(profile) {
     _mode = "create";
     var label = _$("profile-editor-mode-label");
     if (label) label.textContent = "New Profile";
     var btn = _$("profile-editor-save-btn");
     if (btn) btn.textContent = "Create Profile";
-
-    var jsonFields = [
-      "skills", "experiences", "education",
-      "spoken_languages", "scoring_keywords",
-    ];
-    jsonFields.forEach(function (f) {
-      var el = _$("pe-" + f);
-      if (el) el.value = (f === "skills") ? "{}" : "[]";
-    });
+    _populateForm(profile || {});
   }
 
   function _setUpdateMode(profile) {
@@ -176,9 +175,12 @@
       .then(function (result) {
         _setStatus("");
         if (result.status === 200) {
-          _setUpdateMode(result.body);
-        } else if (result.status === 404) {
-          _setCreateMode();
+          var payload = _normalizeProfileResponse(result.body);
+          if (payload.exists === false) {
+            _setCreateMode(payload.profile || {});
+          } else {
+            _setUpdateMode(payload.profile || {});
+          }
         } else {
           var msg = (result.body && result.body.error) || "Failed to load profile.";
           _setStatus(msg, "error");

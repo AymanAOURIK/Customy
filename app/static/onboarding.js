@@ -6,8 +6,8 @@
  *
  * Flow:
  *  1. init() — fetch GET /api/onboarding/draft
- *     → 404: show upload panel, bind upload handler
- *     → 200: show draft summary, enable "Pre-fill My Profile" button
+ *     → 200 exists=false: show upload panel, bind upload handler
+ *     → 200 exists=true: show draft summary, enable "Pre-fill My Profile" button
  *  2. User uploads resume → POST /api/resume/upload → show draft summary
  *  3. User clicks "Pre-fill My Profile" → CProfileEditor.populate(draft_data)
  *  4. User reviews form, clicks "Create Profile" → customy:profile-created → gate removed
@@ -34,6 +34,14 @@
     var draft  = _$("onboarding-draft-panel");
     if (upload) upload.hidden = (which !== "upload");
     if (draft)  draft.hidden  = (which !== "draft");
+  }
+
+  function _errorMessage(body, fallback) {
+    if (!body) return fallback;
+    if (body.error && typeof body.error === "object" && body.error.message) {
+      return body.error.message;
+    }
+    return body.detail || body.error || fallback;
   }
 
   /* ── Draft summary rendering ──────────────────────────── */
@@ -116,7 +124,7 @@
           btn.textContent = "Upload Resume";
 
           if (result.status !== 200) {
-            var msg = (result.body && (result.body.detail || result.body.error)) || "Upload failed.";
+            var msg = _errorMessage(result.body, "Upload failed.");
             if (status) {
               status.textContent = msg;
               status.className   = "onboarding-status onboarding-status--error";
@@ -128,6 +136,7 @@
           _showPanel("draft");
           _renderDraftSummary(result.body);
           _bindPrefill(result.body.draft_data);
+          _bindReupload();
         })
         .catch(function () {
           btn.disabled    = false;
@@ -180,16 +189,19 @@
 
     CAuth.authFetch("/api/onboarding/draft")
       .then(function (r) {
-        if (r.status === 200) {
-          return r.json().then(function (data) {
-            _draft = data;
-            _showPanel("draft");
-            _renderDraftSummary(data);
-            _bindPrefill((data.draft_data || {}));
-            _bindReupload();
-          });
+        return r.json().then(function (data) {
+          return { status: r.status, body: data };
+        });
+      })
+      .then(function (result) {
+        if (result.status === 200 && result.body && result.body.exists === true) {
+          _draft = result.body;
+          _showPanel("draft");
+          _renderDraftSummary(result.body);
+          _bindPrefill((result.body.draft_data || {}));
+          _bindReupload();
+          return;
         }
-        // 404 or any other status → show the upload panel
         _showPanel("upload");
         _bindUpload();
       })

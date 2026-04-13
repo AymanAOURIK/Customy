@@ -1,11 +1,13 @@
 """Resume text extraction for Customy V3 onboarding.
 
 Supports PDF (via pypdf, already in requirements.txt) and plain text (.txt, .md).
-Returns raw extracted text only — no LLM, no cleaning, no rewriting.
+Returns sanitized extracted text only — no LLM, no rewriting.
 """
 from __future__ import annotations
 
 import io
+
+from app.text_utils import sanitize_text
 
 
 def extract_text(file_bytes: bytes, filename: str) -> str:
@@ -16,15 +18,22 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
     """
     name = filename.lower()
     if name.endswith(".pdf"):
-        return _extract_pdf(file_bytes)
-    if name.endswith((".txt", ".md")):
-        try:
-            return file_bytes.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ValueError(f"Could not decode text file as UTF-8: {exc}") from exc
-    raise ValueError(
-        f"Unsupported file type '{filename}'. Upload a .pdf, .txt, or .md file."
-    )
+        raw_text = _extract_pdf(file_bytes)
+        parse_path = "pdf"
+    elif name.endswith((".txt", ".md")):
+        raw_text = file_bytes.decode("utf-8", errors="replace")
+        parse_path = "text"
+    else:
+        raise ValueError(
+            f"Unsupported file type '{filename}'. Upload a .pdf, .txt, or .md file."
+        )
+
+    sanitized = sanitize_text(raw_text, preserve_newlines=True)
+    if not sanitized:
+        raise ValueError(
+            f"Uploaded {parse_path} file contains no usable text after sanitization."
+        )
+    return sanitized
 
 
 def _extract_pdf(file_bytes: bytes) -> str:

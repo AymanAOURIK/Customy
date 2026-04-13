@@ -406,10 +406,68 @@ def _updated_resume_keywords(pack: object, jd_analysis: dict, candidate_context:
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
-def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes]:
+def _resume_file_extension(filename: str) -> str:
+    return Path(filename or "").suffix.lower()
+
+
+def _resume_storage_content_type(filename: str, uploaded_content_type: str | None) -> str:
+    extension = _resume_file_extension(filename)
+    if extension == ".pdf":
+        return "application/pdf"
+    if extension == ".md":
+        return "text/markdown"
+    if extension == ".txt":
+        return "text/plain"
+    return (uploaded_content_type or "application/octet-stream").strip() or "application/octet-stream"
+
+
+def _resume_upload_error_payload(
+    code: str,
+    message: str,
+    *,
+    status: int,
+    details: dict[str, object] | None = None,
+) -> tuple[HTTPStatus, dict[str, object]]:
+    payload: dict[str, object] = {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "status": status,
+        },
+    }
+    if details:
+        payload["error"]["details"] = details
+    return HTTPStatus(status), payload
+
+
+def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
+    if draft is None:
+        return {
+            "exists": False,
+            "status": "empty",
+            "draft_data": {},
+            "gap_analysis": {},
+        }
+    return {
+        "exists": True,
+        "id": str(draft.get("id") or ""),
+        "status": str(draft.get("status") or "draft"),
+        "source_resume_upload_id": (
+            str(draft.get("source_resume_upload_id"))
+            if draft.get("source_resume_upload_id") is not None
+            else None
+        ),
+        "updated_at": str(draft.get("updated_at") or ""),
+        "draft_data": draft.get("draft_data") or {},
+        "gap_analysis": draft.get("gap_analysis") or {},
+    }
+
+
+def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes, str | None]:
     """Parse a multipart/form-data upload request.
 
-    Extracts the field named 'file' and returns (filename, file_bytes).
+    Extracts the field named 'file' and returns (filename, file_bytes, content_type).
     Raises ValueError on any validation failure so the caller can return 400.
     """
     content_type = handler.headers.get("Content-Type", "")
@@ -452,9 +510,14 @@ def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes]:
 
         field_name: str | None = None
         filename: str | None = None
+        part_content_type: str | None = None
         for raw_header in headers_block.split(b"\r\n"):
             header_str = raw_header.decode("utf-8", errors="replace")
-            if not header_str.lower().startswith("content-disposition:"):
+            header_lower = header_str.lower()
+            if header_lower.startswith("content-type:"):
+                part_content_type = header_str.split(":", 1)[1].strip()
+                continue
+            if not header_lower.startswith("content-disposition:"):
                 continue
             for token in header_str.split(";"):
                 token = token.strip()
@@ -464,7 +527,12 @@ def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes]:
                     filename = token[9:].strip().strip('"')
 
         if field_name == "file" and filename:
-            return filename, part_body
+            safe_name = Path(filename).name.strip()
+            if not safe_name:
+                raise ValueError("Uploaded file is missing a valid filename")
+            if not part_body:
+                raise ValueError("Uploaded file is empty")
+            return safe_name, part_body, part_content_type
 
     raise ValueError("No 'file' field found in the upload")
 
@@ -575,9 +643,14 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                             return
                         draft = get_onboarding_draft_db(user_id)
                         if draft is None:
-                            self._json(HTTPStatus.NOT_FOUND, {"error": "no_draft"})
-                            return
-                        self._json(HTTPStatus.OK, draft)
+                            _log.info("onboarding_draft.get empty_state user_id=%s", user_id)
+                        else:
+                            _log.info(
+                                "onboarding_draft.get found user_id=%s status=%s",
+                                user_id,
+                                draft.get("status"),
+                            )
+                        self._json(HTTPStatus.OK, _onboarding_draft_payload(draft))
                         return
                     if dispatch_jobs_get(self, parsed.path, cfg):
                         return
@@ -808,46 +881,234 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     except AuthError as exc:
                         self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
                         return
+                    request_content_type = self.headers.get("Content-Type", "").strip()
                     try:
-                        filename, file_bytes = _parse_upload_file(self)
+                        filename, file_bytes, uploaded_content_type = _parse_upload_file(self)
                     except ValueError as exc:
-                        self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                        _log.warning(
+                            "resume_upload.invalid_request user_id=%s request_content_type=%s error=%s",
+                            user_id,
+                            request_content_type,
+                            exc,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "invalid_upload_request",
+                            str(exc),
+                            status=HTTPStatus.BAD_REQUEST,
+                            details={"request_content_type": request_content_type},
+                        )
+                        self._json(status, payload)
                         return
-                    lower_name = filename.lower()
-                    if not (lower_name.endswith(".pdf") or lower_name.endswith(".txt") or lower_name.endswith(".md")):
-                        self._json(HTTPStatus.BAD_REQUEST, {"error": "Only .pdf, .txt, and .md files are accepted."})
+                    extension = _resume_file_extension(filename)
+                    storage_content_type = _resume_storage_content_type(filename, uploaded_content_type)
+                    parse_path = "pdf" if extension == ".pdf" else "plain_text"
+                    _log.info(
+                        "resume_upload.start user_id=%s filename=%s extension=%s request_content_type=%s file_content_type=%s size_bytes=%d",
+                        user_id,
+                        filename,
+                        extension,
+                        request_content_type,
+                        uploaded_content_type or "",
+                        len(file_bytes),
+                    )
+                    if extension not in {".pdf", ".txt", ".md"}:
+                        _log.warning(
+                            "resume_upload.unsupported_type user_id=%s filename=%s extension=%s",
+                            user_id,
+                            filename,
+                            extension,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "unsupported_file_type",
+                            "Only .pdf, .txt, and .md files are accepted.",
+                            status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                            details={
+                                "filename": filename,
+                                "extension": extension,
+                                "file_content_type": uploaded_content_type or "",
+                            },
+                        )
+                        self._json(status, payload)
                         return
                     upload_uuid = str(uuid.uuid4())
                     storage_path = f"{user_id}/resumes/{upload_uuid}/{filename}"
-                    ct = "application/pdf" if lower_name.endswith(".pdf") else "text/plain"
                     try:
-                        upload_bytes_at_path(storage_path, file_bytes, ct)
+                        upload_bytes_at_path(storage_path, file_bytes, storage_content_type)
+                        _log.info(
+                            "resume_upload.storage_saved user_id=%s filename=%s storage_path=%s",
+                            user_id,
+                            filename,
+                            storage_path,
+                        )
                     except Exception as exc:
-                        _log.exception("Storage upload failed for user %s", user_id)
-                        self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Storage upload failed: {exc}"})
+                        _log.exception(
+                            "resume_upload.storage_failed user_id=%s filename=%s storage_path=%s",
+                            user_id,
+                            filename,
+                            storage_path,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "resume_storage_failed",
+                            "Resume file upload to storage failed.",
+                            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            details={"filename": filename, "storage_path": storage_path},
+                        )
+                        self._json(status, payload)
                         return
-                    upload_row = insert_resume_upload(user_id, storage_path, filename, len(file_bytes))
-                    upload_id = str(upload_row["id"])
+                    try:
+                        upload_row = insert_resume_upload(user_id, storage_path, filename, len(file_bytes))
+                        upload_id = str(upload_row["id"])
+                        _log.info(
+                            "resume_upload.db_inserted user_id=%s upload_id=%s filename=%s",
+                            user_id,
+                            upload_id,
+                            filename,
+                        )
+                    except Exception:
+                        _log.exception(
+                            "resume_upload.db_insert_failed user_id=%s filename=%s storage_path=%s",
+                            user_id,
+                            filename,
+                            storage_path,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "resume_upload_db_insert_failed",
+                            "Resume upload metadata could not be saved.",
+                            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            details={"filename": filename, "storage_path": storage_path},
+                        )
+                        self._json(status, payload)
+                        return
+                    _log.info(
+                        "resume_upload.parse_selected user_id=%s upload_id=%s parse_path=%s",
+                        user_id,
+                        upload_id,
+                        parse_path,
+                    )
                     try:
                         parsed_text = extract_resume_text(file_bytes, filename)
-                        update_resume_upload_parsed(upload_id, parsed_text)
+                        _log.info(
+                            "resume_upload.parsed user_id=%s upload_id=%s text_length=%d",
+                            user_id,
+                            upload_id,
+                            len(parsed_text),
+                        )
                     except ValueError as exc:
-                        update_resume_upload_parsed(upload_id, None, parse_error=str(exc))
-                        self._json(HTTPStatus.UNPROCESSABLE_ENTITY, {"error": "resume_parse_failed", "detail": str(exc)})
+                        try:
+                            update_resume_upload_parsed(upload_id, None, parse_error=str(exc))
+                        except Exception:
+                            _log.exception(
+                                "resume_upload.parse_failure_mark_failed user_id=%s upload_id=%s",
+                                user_id,
+                                upload_id,
+                            )
+                        _log.warning(
+                            "resume_upload.parse_failed user_id=%s upload_id=%s filename=%s error=%s",
+                            user_id,
+                            upload_id,
+                            filename,
+                            exc,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "resume_parse_failed",
+                            str(exc),
+                            status=HTTPStatus.UNPROCESSABLE_ENTITY,
+                            details={
+                                "filename": filename,
+                                "extension": extension,
+                                "parse_path": parse_path,
+                            },
+                        )
+                        self._json(status, payload)
+                        return
+                    try:
+                        update_resume_upload_parsed(upload_id, parsed_text)
+                        _log.info(
+                            "resume_upload.db_parse_saved user_id=%s upload_id=%s text_length=%d",
+                            user_id,
+                            upload_id,
+                            len(parsed_text),
+                        )
+                    except Exception:
+                        _log.exception(
+                            "resume_upload.db_parse_save_failed user_id=%s upload_id=%s",
+                            user_id,
+                            upload_id,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "resume_parse_store_failed",
+                            "Resume text was extracted but could not be stored.",
+                            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            details={"upload_id": upload_id, "filename": filename},
+                        )
+                        self._json(status, payload)
                         return
                     try:
                         draft_data, gap_analysis = onboarding_extract_draft(parsed_text, cfg)
+                        _log.info(
+                            "resume_upload.draft_extracted user_id=%s upload_id=%s experiences=%d skill_count=%s",
+                            user_id,
+                            upload_id,
+                            len(draft_data.get("experiences") or []),
+                            gap_analysis.get("skill_count"),
+                        )
                     except ValueError as exc:
-                        _log.exception("Draft extraction failed for user %s", user_id)
-                        self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "extract_failed", "detail": str(exc)})
+                        _log.exception(
+                            "resume_upload.draft_extract_failed user_id=%s upload_id=%s",
+                            user_id,
+                            upload_id,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "extract_failed",
+                            str(exc),
+                            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            details={"upload_id": upload_id},
+                        )
+                        self._json(status, payload)
                         return
-                    draft_row = upsert_onboarding_draft(user_id, upload_id, draft_data, gap_analysis)
-                    self._json(HTTPStatus.OK, {
-                        "upload_id": upload_id,
-                        "draft_status": draft_row.get("status", "draft"),
-                        "draft_data": draft_data,
-                        "gap_analysis": gap_analysis,
-                    })
+                    try:
+                        draft_row = upsert_onboarding_draft(user_id, upload_id, draft_data, gap_analysis)
+                        _log.info(
+                            "resume_upload.draft_saved user_id=%s upload_id=%s draft_status=%s",
+                            user_id,
+                            upload_id,
+                            draft_row.get("status", "draft"),
+                        )
+                    except Exception:
+                        _log.exception(
+                            "resume_upload.draft_save_failed user_id=%s upload_id=%s",
+                            user_id,
+                            upload_id,
+                        )
+                        status, payload = _resume_upload_error_payload(
+                            "onboarding_draft_store_failed",
+                            "Resume was parsed but the onboarding draft could not be saved.",
+                            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            details={"upload_id": upload_id},
+                        )
+                        self._json(status, payload)
+                        return
+                    draft_payload = _onboarding_draft_payload(draft_row)
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "upload": {
+                                "id": upload_id,
+                                "filename": filename,
+                                "extension": extension,
+                                "content_type": storage_content_type,
+                                "storage_path": storage_path,
+                                "file_size_bytes": len(file_bytes),
+                                "parse_path": parse_path,
+                                "text_length": len(parsed_text),
+                                "parse_status": "done",
+                            },
+                            "draft": draft_payload,
+                            "draft_data": draft_payload.get("draft_data", {}),
+                            "gap_analysis": draft_payload.get("gap_analysis", {}),
+                        },
+                    )
                     return
                 if parsed.path == "/api/profile":
                     handle_profile_create(self, cfg)
@@ -882,9 +1143,19 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         return
                     profile = get_profile(user_id)
                     if not profile:
+                        has_onboarding_draft = get_onboarding_draft_db(user_id) is not None
+                        _log.warning(
+                            "generate.blocked_missing_profile user_id=%s has_onboarding_draft=%s",
+                            user_id,
+                            has_onboarding_draft,
+                        )
                         self._json(
                             HTTPStatus.UNPROCESSABLE_ENTITY,
-                            {"error": "Profile not found. Create one via POST /api/profile first."},
+                            {
+                                "error": "profile_incomplete",
+                                "detail": "Finish onboarding and save your profile before generating documents.",
+                                "has_onboarding_draft": has_onboarding_draft,
+                            },
                         )
                         return
                     candidate_context = profile_to_candidate_context(profile)
@@ -1426,7 +1697,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             self.wfile.write(content)
 
         def _json(self, status: HTTPStatus, payload: dict) -> None:
-            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

@@ -1413,11 +1413,16 @@
         function _enforceProfileGate() {
           CAuth.authFetch("/api/profile")
             .then(function (r) {
-              if (r.status === 404) {
+              return r.json().then(function (body) {
+                return { status: r.status, body: body };
+              });
+            })
+            .then(function (result) {
+              if (result.status === 200 && result.body && result.body.exists === false) {
                 document.body.classList.add("profile-gate");
                 if (window.CustomyDashboard) CustomyDashboard.navigateTo("section-profile-editor");
                 if (window.COnboarding) COnboarding.init();
-              } else {
+              } else if (result.status === 200) {
                 document.body.classList.remove("profile-gate");
               }
             })

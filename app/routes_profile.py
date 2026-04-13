@@ -17,7 +17,8 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 from app.auth import AuthError, require_auth
-from app.profile_db import create_profile, get_profile, update_profile
+from app.profile_db import create_profile, get_profile, update_profile, upsert_profile
+from app.text_utils import sanitize_data_strings
 
 _log = logging.getLogger(__name__)
 
@@ -26,9 +27,12 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length", "0"))
     raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
     try:
-        return json.loads(raw or "{}")
+        payload = json.loads(raw or "{}")
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("JSON body must be an object")
+    return payload
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
@@ -40,19 +44,57 @@ def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload:
     handler.wfile.write(body)
 
 
+def _claim_str(payload: dict[str, Any], *path: str) -> str:
+    current: Any = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return ""
+        current = current.get(key)
+    return str(current or "").strip()
+
+
+def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[str, Any]:
+    profile = {
+        "user_id": user_id,
+        "full_name": (
+            _claim_str(auth_payload, "user_metadata", "full_name")
+            or _claim_str(auth_payload, "user_metadata", "name")
+        ),
+        "email": _claim_str(auth_payload, "email"),
+        "phone": "",
+        "location": "",
+        "linkedin": "",
+        "github": "",
+        "headline": "",
+        "summary": "",
+        "skills": {},
+        "experiences": [],
+        "education": [],
+        "spoken_languages": [],
+        "scoring_keywords": [],
+    }
+    return {"exists": False, "profile": profile}
+
+
+def _sanitize_profile_payload(data: dict[str, Any]) -> dict[str, Any]:
+    return sanitize_data_strings(data, preserve_newlines=True)
+
+
 def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     """GET /api/profile"""
     try:
-        user_id, _ = require_auth(handler)
+        user_id, auth_payload = require_auth(handler)
     except AuthError as exc:
         _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     profile = get_profile(user_id)
     if profile is None:
-        _json_response(handler, HTTPStatus.NOT_FOUND, {"error": "Profile not found"})
+        _log.info("profile.get empty_state user_id=%s", user_id)
+        _json_response(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
         return
-    _json_response(handler, HTTPStatus.OK, profile)
+    _log.info("profile.get found user_id=%s", user_id)
+    _json_response(handler, HTTPStatus.OK, {"exists": True, "profile": profile})
 
 
 def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -64,12 +106,12 @@ def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
 
     try:
-        data = _read_json(handler)
+        data = _sanitize_profile_payload(_read_json(handler))
     except ValueError as exc:
         _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
-    if not data.get("full_name", "").strip():
+    if not str(data.get("full_name") or "").strip():
         _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required"})
         return
 
@@ -85,6 +127,7 @@ def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
+    _log.info("profile.create created user_id=%s", user_id)
     _json_response(handler, HTTPStatus.CREATED, profile)
 
 
@@ -97,21 +140,28 @@ def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
 
     try:
-        data = _read_json(handler)
+        data = _sanitize_profile_payload(_read_json(handler))
     except ValueError as exc:
         _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     existing = get_profile(user_id)
-    if not existing:
-        _json_response(handler, HTTPStatus.NOT_FOUND, {"error": "Profile not found. Use POST to create."})
+    if not existing and not str(data.get("full_name") or "").strip():
+        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required to create a profile"})
         return
 
     try:
-        profile = update_profile(user_id, data)
+        if existing:
+            profile = update_profile(user_id, data)
+            status = HTTPStatus.OK
+            _log.info("profile.put updated user_id=%s", user_id)
+        else:
+            profile = upsert_profile(user_id, data)
+            status = HTTPStatus.CREATED
+            _log.info("profile.put created_missing_profile user_id=%s", user_id)
     except Exception as exc:
         _log.exception("Failed to update profile for user %s", user_id)
         _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
-    _json_response(handler, HTTPStatus.OK, profile)
+    _json_response(handler, status, profile)
