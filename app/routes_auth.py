@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
-from app.auth import AuthError, is_admin, require_auth
+from app.auth import AuthError, is_admin, is_allowed_user, require_auth
 
 _log = logging.getLogger(__name__)
 
@@ -45,12 +45,25 @@ def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
+    email = payload.get("email")
+    if not is_allowed_user(user_id, email):
+        _log.warning("Access denied for user %s (%s) — not on allowlist", user_id, email)
+        _json_response(
+            handler,
+            HTTPStatus.FORBIDDEN,
+            {
+                "error": "Access not granted. Contact administrator.",
+                "access_denied": True,
+            },
+        )
+        return
+
     _json_response(
         handler,
         HTTPStatus.OK,
         {
             "user_id": user_id,
-            "email": payload.get("email"),
+            "email": email,
             "is_admin": is_admin(user_id),
         },
     )

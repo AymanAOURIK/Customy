@@ -1396,6 +1396,12 @@
         if (modeTitle) modeTitle.textContent = "SaaS Mode";
         if (modeText)  modeText.textContent  = "Signed-in session. Data synced to the cloud.";
 
+        /* ── SaaS mode: hide signup tab (invite-only access) ── */
+        var _signupTabBtn  = document.getElementById("auth-tab-signup");
+        var _signupTabForm = document.getElementById("auth-form-signup");
+        if (_signupTabBtn)  _signupTabBtn.setAttribute("hidden", "");
+        if (_signupTabForm) _signupTabForm.setAttribute("hidden", "");
+
         /* ── Logout button ── */
         var logoutBtn = document.getElementById("topbar-logout-btn");
         if (logoutBtn) {
@@ -1407,30 +1413,36 @@
 
         /* ── React to every auth-state change ── */
         CAuth.onAuthStateChange(function (session) {
-          /* Always reveal the shell once session state is known. */
-          _revealShell();
-
           if (session) {
-            /* Signed in — hide overlay, populate topbar, boot modules. */
-            if (window.CAuthUI) CAuthUI.hide();
-            var email  = (session.user && session.user.email) || "";
-            var handle = email.split("@")[0] || email;
-            var avatarEl = document.getElementById("topbar-user-avatar");
-            var nameEl   = document.getElementById("topbar-user-name");
-            if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
-            if (nameEl)   nameEl.textContent   = handle || email;
-            if (logoutBtn) logoutBtn.removeAttribute("hidden");
-            if (window.CustomyDashboard) CustomyDashboard.refresh();
-            if (window.CProfileEditor) CProfileEditor.init();
-            if (window.CJobTracker) CJobTracker.init();
-
-            /* Gate generation until profile exists. */
-            _enforceProfileGate();
-
-            /* Check admin status and reveal admin section if authorised. */
+            /* Signed in — verify allowlist BEFORE revealing the shell. */
             CAuth.authFetch("/api/auth/me")
-              .then(function (r) { return r.json(); })
-              .then(function (me) {
+              .then(function (r) {
+                return r.json().then(function (me) { return { status: r.status, me: me }; });
+              })
+              .then(function (result) {
+                _revealShell();
+                if (result.status === 403 && result.me.access_denied) {
+                  /* Not on allowlist — show error and sign out immediately. */
+                  var loginError = document.getElementById("auth-login-error");
+                  if (loginError) loginError.textContent = result.me.error || "Access not granted. Contact administrator.";
+                  if (window.CAuthUI) CAuthUI.show();
+                  CAuth.signOut();
+                  return;
+                }
+                /* Allowed — hide overlay, populate topbar, boot modules. */
+                var me = result.me;
+                if (window.CAuthUI) CAuthUI.hide();
+                var email  = (session.user && session.user.email) || "";
+                var handle = email.split("@")[0] || email;
+                var avatarEl = document.getElementById("topbar-user-avatar");
+                var nameEl   = document.getElementById("topbar-user-name");
+                if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
+                if (nameEl)   nameEl.textContent   = handle || email;
+                if (logoutBtn) logoutBtn.removeAttribute("hidden");
+                if (window.CustomyDashboard) CustomyDashboard.refresh();
+                if (window.CProfileEditor) CProfileEditor.init();
+                if (window.CJobTracker) CJobTracker.init();
+                _enforceProfileGate();
                 var adminLink  = document.getElementById("sidebar-admin-link");
                 var adminGroup = document.getElementById("sidebar-admin-group");
                 if (me.is_admin) {
@@ -1442,9 +1454,25 @@
                   if (adminGroup) adminGroup.setAttribute("hidden", "");
                 }
               })
-              .catch(function () { /* non-critical — admin link stays hidden */ });
+              .catch(function () {
+                /* Network error — fail open: reveal shell and continue normally. */
+                _revealShell();
+                if (window.CAuthUI) CAuthUI.hide();
+                var email  = (session.user && session.user.email) || "";
+                var handle = email.split("@")[0] || email;
+                var avatarEl = document.getElementById("topbar-user-avatar");
+                var nameEl   = document.getElementById("topbar-user-name");
+                if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "?";
+                if (nameEl)   nameEl.textContent   = handle || email;
+                if (logoutBtn) logoutBtn.removeAttribute("hidden");
+                if (window.CustomyDashboard) CustomyDashboard.refresh();
+                if (window.CProfileEditor) CProfileEditor.init();
+                if (window.CJobTracker) CJobTracker.init();
+                _enforceProfileGate();
+              });
           } else {
-            /* Signed out — clear state, show login overlay, hide admin. */
+            /* Signed out — reveal shell, clear state, show login overlay, hide admin. */
+            _revealShell();
             _clearDashboardState();
             if (window.CAuthUI) CAuthUI.show();
             if (logoutBtn) logoutBtn.setAttribute("hidden", "");

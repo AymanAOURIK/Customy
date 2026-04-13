@@ -66,6 +66,37 @@ def _get_admin_ids() -> set[str]:
     return _ADMIN_USER_IDS
 
 
+_ALLOWED_EMAILS: set[str] | None = None
+
+
+def _get_allowed_emails() -> set[str]:
+    global _ALLOWED_EMAILS
+    if _ALLOWED_EMAILS is None:
+        raw = os.environ.get("ALLOWED_USER_EMAILS", "")
+        _ALLOWED_EMAILS = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    return _ALLOWED_EMAILS
+
+
+def is_allowed_user(user_id: str, email: str | None = None) -> bool:
+    """Return True if this user is permitted to access the application.
+
+    Rules (evaluated in order):
+    1. Local mode → always True (no restriction in dev).
+    2. Admin users (ADMIN_USER_IDS) → always True.
+    3. ALLOWED_USER_EMAILS env var not set → True (open access / backward-compat).
+    4. Email present in ALLOWED_USER_EMAILS → True.
+    5. Otherwise → False (invite-only enforcement).
+    """
+    if os.environ.get("CUSTOMY_MODE", "local").strip().lower() != "saas":
+        return True
+    if is_admin(user_id):
+        return True
+    allowed = _get_allowed_emails()
+    if not allowed:
+        return True
+    return bool(email and email.strip().lower() in allowed)
+
+
 def verify_jwt(token: str) -> dict[str, Any]:
     """Decode and verify a Supabase JWT. Returns the payload dict on success."""
     try:
