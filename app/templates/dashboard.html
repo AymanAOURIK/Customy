@@ -1253,6 +1253,7 @@
           <button id="auth-tab-login"  class="auth-tab auth-tab--active">Sign In</button>
           <button id="auth-tab-signup" class="auth-tab">Sign Up</button>
         </div>
+        <p id="auth-invite-notice" class="auth-msg" hidden>Invite-only beta — contact administrator for access.</p>
         <!-- Login form -->
         <form id="auth-form-login" class="auth-form" onsubmit="return false">
           <input id="auth-login-email"    type="email"    class="auth-input" placeholder="Email address"  autocomplete="email" />
@@ -1396,11 +1397,13 @@
         if (modeTitle) modeTitle.textContent = "SaaS Mode";
         if (modeText)  modeText.textContent  = "Signed-in session. Data synced to the cloud.";
 
-        /* ── SaaS mode: hide signup tab (invite-only access) ── */
+        /* ── SaaS mode: invite-only — hide sign-up, show notice ── */
         var _signupTabBtn  = document.getElementById("auth-tab-signup");
         var _signupTabForm = document.getElementById("auth-form-signup");
+        var _inviteNotice  = document.getElementById("auth-invite-notice");
         if (_signupTabBtn)  _signupTabBtn.setAttribute("hidden", "");
         if (_signupTabForm) _signupTabForm.setAttribute("hidden", "");
+        if (_inviteNotice)  _inviteNotice.removeAttribute("hidden");
 
         /* ── Logout button ── */
         var logoutBtn = document.getElementById("topbar-logout-btn");
