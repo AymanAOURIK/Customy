@@ -66,6 +66,7 @@
   var chart = document.getElementById("activity-chart");
   var tooltip = document.getElementById("chart-tooltip");
   var svgNS = "http://www.w3.org/2000/svg";
+  var isSaas = !!(window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas");
   var statusOptions = [
     "generated",
     "applied",
@@ -322,24 +323,37 @@
       var actionWrap = document.createElement("div");
       actionWrap.className = "shell-action-row";
 
-      var folderBtn = document.createElement("button");
-      folderBtn.type = "button";
-      folderBtn.className = "shell-small-btn";
-      folderBtn.textContent = "Folder";
-      folderBtn.title = item.folder_path || "";
-      folderBtn.disabled = !item.folder_url;
-      folderBtn.addEventListener("click", function () {
+      var filesBtn = document.createElement("button");
+      filesBtn.type = "button";
+      filesBtn.className = "shell-small-btn";
+      filesBtn.textContent = isSaas ? "Files" : "Folder";
+      filesBtn.title = isSaas ? "Open generated files" : item.folder_path || "";
+      filesBtn.disabled = isSaas ? !item.id : !item.folder_url;
+      filesBtn.addEventListener("click", function () {
+        if (isSaas) {
+          if (!item.id || !window.CustomyFiles) return;
+          filesBtn.disabled = true;
+          window.CustomyFiles
+            .open(item.id)
+            .catch(function (err) {
+              alert(err.message);
+            })
+            .finally(function () {
+              filesBtn.disabled = false;
+            });
+          return;
+        }
         if (!item.folder_url) return;
-        folderBtn.disabled = true;
+        filesBtn.disabled = true;
         openFolder(item.folder_url)
           .catch(function (err) {
             alert(err.message);
           })
           .finally(function () {
-            folderBtn.disabled = false;
+            filesBtn.disabled = false;
           });
       });
-      actionWrap.appendChild(folderBtn);
+      actionWrap.appendChild(filesBtn);
 
       var dupBtn = document.createElement("button");
       dupBtn.type = "button";

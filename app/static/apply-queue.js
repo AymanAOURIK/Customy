@@ -144,6 +144,7 @@
             '<button class="aq-btn" disabled title="Available only in local mode">Answers</button>'
           : '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Auto-fill</button>' +
             '<button class="aq-btn" onclick="AQ.openAnswers(' + app.id + ')">Answers</button>';
+        var packageLabel = _isSaas ? "Files" : "Package";
 
         return (
           "<tr>" +
@@ -155,7 +156,7 @@
           "<td>" + ats + "</td>" +
           "<td>" + helperButtons + "</td>" +
           '<td class="aq-cell-actions">' +
-            '<button class="aq-btn" onclick="AQ.openPackage(' + app.id + ')">Package</button>' +
+            '<button class="aq-btn" onclick="AQ.openPackage(' + app.id + ')">' + packageLabel + "</button>" +
             '<button class="aq-btn aq-btn--apply" onclick="AQ.markApplied(' + app.id + ', this)">Applied ✓</button>' +
           "</td>" +
           "</tr>"
@@ -181,6 +182,10 @@
     var app = _queue.find(function (item) { return item.id === appId; }) || {};
     if (!_isSaas && app.folder_url) {
       apiFetch(app.folder_url, { method: "POST" }).catch(function () {});
+      return;
+    }
+    if (_isSaas && window.CustomyFiles) {
+      window.CustomyFiles.open(appId).catch(function () {});
       return;
     }
     var outputs = app.outputs || {};

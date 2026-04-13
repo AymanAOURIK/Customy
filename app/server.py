@@ -292,6 +292,133 @@ def _serialize_files(slug: str, files: dict, cloud_paths: dict | None = None) ->
     return response
 
 
+def _local_cover_letter_path(outputs_path: object) -> Path | None:
+    raw_path = str(outputs_path or "").strip()
+    if not raw_path:
+        return None
+    matches = sorted(Path(raw_path).glob("*Cover_letter.txt"))
+    return matches[0] if matches else None
+
+
+def _derived_generated_json_storage_path(row: dict) -> str | None:
+    user_id = str(row.get("user_id") or "").strip()
+    slug = str(row.get("slug") or "").strip()
+    if not user_id or not slug:
+        return None
+    return f"{user_id}/{slug}/generated.json"
+
+
+def _serialize_application_files(row: dict, *, cloud_mode: bool = False) -> dict:
+    files: list[dict[str, str]] = []
+    missing: list[dict[str, str]] = []
+
+    def add_file(key: str, label: str, path: object, url: str) -> None:
+        path_str = str(path or "").strip()
+        files.append(
+            {
+                "key": key,
+                "label": label,
+                "path": path_str,
+                "filename": Path(path_str).name if path_str else "",
+                "url": url,
+            }
+        )
+
+    def add_missing(key: str, label: str, reason: str) -> None:
+        missing.append({"key": key, "label": label, "reason": reason})
+
+    if cloud_mode:
+        for key, label, stored_path, expected in (
+            ("resume_pdf", "Resume PDF", row.get("resume_pdf_url"), True),
+            ("resume_tex", "Resume TEX", row.get("resume_tex_url"), True),
+            ("cover_letter", "Cover Letter", row.get("cover_letter_url"), bool(row.get("cover_letter"))),
+            ("linkedin_message", "LinkedIn Message", row.get("linkedin_msg_url"), bool(row.get("linkedin_msg"))),
+            ("email_draft", "Email Draft", row.get("email_draft_url"), bool(row.get("email_draft"))),
+            (
+                "generated_json",
+                "Generated JSON",
+                row.get("generated_json_url") or _derived_generated_json_storage_path(row),
+                True,
+            ),
+        ):
+            if stored_path:
+                try:
+                    add_file(key, label, stored_path, get_signed_url_for_path(str(stored_path)))
+                except Exception as exc:
+                    _log.warning(
+                        "artifact.sign_failed app_id=%s key=%s path=%s error=%s",
+                        row.get("id"),
+                        key,
+                        stored_path,
+                        exc,
+                    )
+                    add_missing(key, label, "File is not available right now.")
+                continue
+            if expected:
+                add_missing(key, label, "File was not generated for this application.")
+        return {"files": files, "missing": missing}
+
+    outputs_path = str(row.get("outputs_path") or "").strip()
+    if row.get("resume_pdf_path"):
+        add_file(
+            "resume_pdf",
+            "Resume PDF",
+            row["resume_pdf_path"],
+            _artifact_url(str(row.get("slug") or ""), Path(str(row["resume_pdf_path"])).name),
+        )
+    else:
+        add_missing("resume_pdf", "Resume PDF", "PDF was not generated for this application.")
+
+    if row.get("resume_tex_path"):
+        add_file(
+            "resume_tex",
+            "Resume TEX",
+            row["resume_tex_path"],
+            _artifact_url(str(row.get("slug") or ""), Path(str(row["resume_tex_path"])).name),
+        )
+    else:
+        add_missing("resume_tex", "Resume TEX", "File was not generated for this application.")
+
+    cover_letter_path = _local_cover_letter_path(outputs_path)
+    if cover_letter_path is not None:
+        add_file(
+            "cover_letter",
+            "Cover Letter",
+            str(cover_letter_path),
+            _artifact_url(str(row.get("slug") or ""), cover_letter_path.name),
+        )
+    elif row.get("cover_letter"):
+        add_missing("cover_letter", "Cover Letter", "File was not generated for this application.")
+
+    for key, label, filename, enabled in (
+        ("linkedin_message", "LinkedIn Message", "linkedin_message.md", bool(row.get("linkedin_msg"))),
+        ("email_draft", "Email Draft", "email_draft.md", bool(row.get("email_draft"))),
+    ):
+        local_path = Path(outputs_path) / filename if outputs_path else None
+        if local_path and local_path.is_file():
+            add_file(
+                key,
+                label,
+                str(local_path),
+                _artifact_url(str(row.get("slug") or ""), filename),
+            )
+        elif enabled:
+            add_missing(key, label, "File was not generated for this application.")
+
+    generated_json_path = Path(outputs_path) / "generated.json" if outputs_path else None
+    if generated_json_path and generated_json_path.is_file():
+        add_file(
+            "generated_json",
+            "Generated JSON",
+            str(generated_json_path),
+            _artifact_url(str(row.get("slug") or ""), "generated.json"),
+        )
+    else:
+        add_missing("generated_json", "Generated JSON", "File was not generated for this application.")
+
+    return {"files": files, "missing": missing}
+
+
 def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
     slug = row.get("slug", "")
     initial_score = row.get("initial_score")
@@ -317,9 +444,9 @@ def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
         if row.get("resume_tex_path"):
             outputs["resume_tex"] = _artifact_url(slug, Path(row["resume_tex_path"]).name)
         if row.get("cover_letter") and row.get("outputs_path"):
-            _cl_matches = sorted(Path(row["outputs_path"]).glob("*Cover_letter.txt"))
-            if _cl_matches:
-                outputs["cover_letter"] = _artifact_url(slug, _cl_matches[0].name)
+            _cl_path = _local_cover_letter_path(row["outputs_path"])
+            if _cl_path is not None:
+                outputs["cover_letter"] = _artifact_url(slug, _cl_path.name)
         if row.get("linkedin_msg"):
             outputs["linkedin_message"] = _artifact_url(slug, "linkedin_message.md")
         if row.get("email_draft"):
@@ -599,6 +726,10 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     return
                 if parsed.path == "/api/tracker":
                     self._handle_tracker()
+                    return
+                _files_match = re.fullmatch(r"/api/applications/(\d+)/files", parsed.path)
+                if _files_match:
+                    self._handle_application_files(int(_files_match.group(1)))
                     return
                 _ev_match = re.fullmatch(r"/api/applications/(\d+)/events", parsed.path)
                 if _ev_match:
@@ -1581,6 +1712,31 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         }
                         for row in rows
                     ],
+                },
+            )
+
+        def _handle_application_files(self, app_id: int) -> None:
+            if cfg["mode"] == "saas":
+                user_id = self._require_saas_user_id()
+                if user_id is None:
+                    return
+                row = pg_get_application(user_id, app_id)
+            else:
+                row = get_application(db_path, app_id)
+            if not row:
+                self._json(HTTPStatus.NOT_FOUND, {"error": "Application not found."})
+                return
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "application_id": app_id,
+                    "application": {
+                        "id": row.get("id"),
+                        "company": row.get("company"),
+                        "role": row.get("role"),
+                        "slug": row.get("slug"),
+                    },
+                    **_serialize_application_files(row, cloud_mode=cfg["mode"] == "saas"),
                 },
             )
 
