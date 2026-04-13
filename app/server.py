@@ -434,6 +434,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     self._serve_static(filename)
                     return
                 if parsed.path.startswith("/artifacts/"):
+                    if cfg["mode"] == "saas":
+                        self._json(HTTPStatus.FORBIDDEN, {"error": "Artifact access is not available in SaaS mode."})
+                        return
                     self._serve_artifact(parsed.path)
                     return
                 if parsed.path == "/api/health":
@@ -1248,7 +1251,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     'mode: "saas", '
                     "supabaseUrl: " + json.dumps(supabase_url) + ", "
                     "supabaseAnonKey: " + json.dumps(anon_key) +
-                    "};</script>"
+                    "};"
+                    "document.documentElement.setAttribute('data-saas-loading','');"
+                    "</script>"
                 )
             else:
                 config_script = '<script>window.CUSTOMY_CONFIG = {mode: "local"};</script>'

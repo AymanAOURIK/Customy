@@ -27,6 +27,12 @@
     return;
   }
 
+  /* In SaaS mode this module renders static owner-specific data.
+     Skip rendering until per-user dynamic profile intelligence is implemented. */
+  if (window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas") {
+    return;
+  }
+
   var PI = window.PROFILE_INTELLIGENCE;
 
   /* ── Utility ────────────────────────────────────────────── */

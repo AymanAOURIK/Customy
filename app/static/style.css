@@ -2111,6 +2111,22 @@ body.platform-body {
   overflow-y: auto;
 }
 
+/* ── SaaS fail-closed: hide shell until auth state resolves ─ */
+
+html[data-saas-loading] .platform {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Profile gate: disable generation until profile exists ── */
+
+body.profile-gate [data-section-target="section-tailoring-studio"],
+body.profile-gate #studio-generate-btn {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 /* ── Auth overlay ────────────────────────────────────────── */
 
 .auth-overlay {

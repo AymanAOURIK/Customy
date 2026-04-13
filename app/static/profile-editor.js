@@ -151,6 +151,9 @@
           _setUpdateMode(result.body);
           _setStatus("Saved.", "success");
           setTimeout(function () { _setStatus(""); }, 3000);
+          if (result.status === 201) {
+            window.dispatchEvent(new CustomEvent("customy:profile-created"));
+          }
         } else {
           var msg = (result.body && result.body.error) || "Save failed.";
           _setStatus(msg, "error");
