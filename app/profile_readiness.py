@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from app.candidate_context import build_candidate_context_from_profile_data
+from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_quality import build_profile_quality_report
 
 _ALLOWED_STATUSES = {"ready", "review"}
@@ -31,10 +32,27 @@ def build_profile_readiness_gate(profile_quality_report: Mapping[str, Any] | Non
     }
 
 
+def build_saved_profile_enrichment_plan(
+    profile_data: Mapping[str, Any] | None,
+    profile_quality_report: Mapping[str, Any] | None = None,
+) -> dict[str, object]:
+    """Build the enrichment plan from the canonical saved-profile shape."""
+    report = profile_quality_report if isinstance(profile_quality_report, Mapping) else {}
+    return build_profile_enrichment_plan(
+        report,
+        profile_data,
+        candidate_source="postgres",
+    )
+
+
 def evaluate_saved_profile_readiness(profile_data: Mapping[str, Any] | None) -> dict[str, dict[str, object]]:
-    """Return the gate payload and the underlying quality report."""
+    """Return the gate payload and the underlying quality-derived reports."""
     profile_quality_report = build_saved_profile_quality_report(profile_data)
     return {
         "profile_readiness_gate": build_profile_readiness_gate(profile_quality_report),
         "profile_quality_report": profile_quality_report,
+        "profile_enrichment_plan": build_saved_profile_enrichment_plan(
+            profile_data,
+            profile_quality_report,
+        ),
     }

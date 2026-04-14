@@ -62,11 +62,19 @@ def _profile_enrichment_plan(
     )
 
 
-def _profile_response(profile: dict[str, Any]) -> dict[str, Any]:
-    body = dict(profile or {})
+def _profile_reports(
+    profile_data: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, object], dict[str, object]]:
+    body = dict(profile_data or {})
     quality_report = _profile_quality_report(body)
+    enrichment_plan = _profile_enrichment_plan(body, quality_report)
+    return body, quality_report, enrichment_plan
+
+
+def _profile_response(profile: dict[str, Any]) -> dict[str, Any]:
+    body, quality_report, enrichment_plan = _profile_reports(profile)
     body["profile_quality_report"] = quality_report
-    body["profile_enrichment_plan"] = _profile_enrichment_plan(body, quality_report)
+    body["profile_enrichment_plan"] = enrichment_plan
     return body
 
 
@@ -90,11 +98,12 @@ def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[s
         "spoken_languages": [],
         "scoring_keywords": [],
     }
+    _, quality_report, enrichment_plan = _profile_reports(profile)
     return {
         "exists": False,
         "profile": profile,
-        "profile_quality_report": _profile_quality_report(profile),
-        "profile_enrichment_plan": _profile_enrichment_plan(profile),
+        "profile_quality_report": quality_report,
+        "profile_enrichment_plan": enrichment_plan,
     }
 
 
@@ -116,14 +125,15 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
         return
     _log.info("profile.get found user_id=%s", user_id)
+    profile_body, quality_report, enrichment_plan = _profile_reports(profile)
     send_json(
         handler,
         HTTPStatus.OK,
         {
             "exists": True,
-            "profile": profile,
-            "profile_quality_report": _profile_quality_report(profile),
-            "profile_enrichment_plan": _profile_enrichment_plan(profile),
+            "profile": profile_body,
+            "profile_quality_report": quality_report,
+            "profile_enrichment_plan": enrichment_plan,
         },
     )
 

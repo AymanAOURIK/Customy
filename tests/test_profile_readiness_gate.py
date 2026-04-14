@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_readiness import evaluate_saved_profile_readiness
 
 
@@ -72,11 +73,20 @@ def _saved_profile(**overrides):
     return profile
 
 
+def _normalized_plan(plan: dict[str, object]) -> dict[str, object]:
+    normalized = dict(plan)
+    normalized.pop("generated_at", None)
+    return normalized
+
+
 class ProfileReadinessGateTests(unittest.TestCase):
     def test_blocked_profile_returns_blocked_gate_and_report(self):
         result = evaluate_saved_profile_readiness({})
 
-        self.assertEqual(set(result.keys()), {"profile_readiness_gate", "profile_quality_report"})
+        self.assertEqual(
+            set(result.keys()),
+            {"profile_readiness_gate", "profile_quality_report", "profile_enrichment_plan"},
+        )
         self.assertEqual(
             result["profile_readiness_gate"],
             {
@@ -86,6 +96,16 @@ class ProfileReadinessGateTests(unittest.TestCase):
             },
         )
         self.assertEqual(result["profile_quality_report"]["overall_status"], "blocked")
+        self.assertEqual(
+            _normalized_plan(result["profile_enrichment_plan"]),
+            _normalized_plan(
+                build_profile_enrichment_plan(
+                    result["profile_quality_report"],
+                    {},
+                    candidate_source="postgres",
+                )
+            ),
+        )
 
     def test_review_profile_allows_generation(self):
         review_profile = _saved_profile(
@@ -126,6 +146,7 @@ class ProfileReadinessGateTests(unittest.TestCase):
         self.assertEqual(result["profile_readiness_gate"]["decision"], "allow")
         self.assertEqual(result["profile_readiness_gate"]["status"], "review")
         self.assertEqual(result["profile_quality_report"]["overall_status"], "review")
+        self.assertEqual(result["profile_enrichment_plan"]["overall_status"], "review")
 
     def test_ready_profile_allows_generation(self):
         result = evaluate_saved_profile_readiness(_saved_profile())
@@ -133,6 +154,8 @@ class ProfileReadinessGateTests(unittest.TestCase):
         self.assertEqual(result["profile_readiness_gate"]["decision"], "allow")
         self.assertEqual(result["profile_readiness_gate"]["status"], "ready")
         self.assertEqual(result["profile_quality_report"]["overall_status"], "ready")
+        self.assertEqual(result["profile_enrichment_plan"]["overall_status"], "ready")
+        self.assertEqual(result["profile_enrichment_plan"]["summary"]["total_targets"], 0)
 
 
 if __name__ == "__main__":
