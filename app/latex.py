@@ -259,7 +259,7 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
     contact_rows = [
         _render_contact_row(
             rf"\Letter\ \href{{mailto:{_escape(personal.get('email', ''))}}}{{{_escape(personal.get('email', ''))}}}" if personal.get("email") else "",
-            rf"\Telefon\ {_escape(personal.get('phone', ''))}" if personal.get("phone") else "",
+            rf"\phone\ {_escape(personal.get('phone', ''))}" if personal.get("phone") else "",
         ),
         _render_contact_row(
             _escape(personal.get("location", "")),
@@ -280,7 +280,7 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
             r"\usepackage{enumitem}",
             r"\usepackage{titlesec}",
             r"\usepackage{tabularx}",
-            r"\usepackage{marvosym}",
+            r"\usepackage{wasysym}",
             r"\pagestyle{empty}",
             r"\flushbottom",
             r"\setlength{\parindent}{0pt}",

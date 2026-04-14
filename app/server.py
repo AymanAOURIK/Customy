@@ -1393,6 +1393,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     )
                     if pdf_path:
                         files["resume_pdf"] = pdf_path
+                    else:
+                        _log.warning("PDF compilation failed or pdflatex not found; resume.pdf will not be uploaded.")
 
                     if cfg["mode"] == "saas":
                         try:
