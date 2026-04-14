@@ -73,6 +73,21 @@ def get_latest_resume_upload(user_id: str) -> dict[str, Any] | None:
             return _row(cur)
 
 
+def get_resume_upload(user_id: str, upload_id: str) -> dict[str, Any] | None:
+    """Return one resume_upload row for this user, or None if not found."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM resume_uploads
+                WHERE user_id = %s AND id = %s
+                LIMIT 1
+                """,
+                (user_id, upload_id),
+            )
+            return _row(cur)
+
+
 # ---------------------------------------------------------------------------
 # onboarding_drafts
 # ---------------------------------------------------------------------------

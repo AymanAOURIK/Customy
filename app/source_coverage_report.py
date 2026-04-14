@@ -10,7 +10,12 @@ import re
 from typing import Any, Mapping
 
 from app.candidate_context import build_candidate_context_from_profile_data
-from app.source_signal_index import _COMPILED_TOOL_PATTERNS, _metric_tokens_for_line, _normalize_text
+from app.source_signal_index import (
+    _COMPILED_TOOL_PATTERNS,
+    _metric_tokens_for_line,
+    _normalize_text,
+    build_source_signal_index,
+)
 from app.text_utils import clean_text as _clean_text
 
 REPORT_VERSION = "source_coverage_report.v1"
@@ -155,6 +160,23 @@ def build_source_coverage_report_from_profile_data(
     """Wrapper for raw extracted draft/profile payloads."""
     return build_source_coverage_report(
         source_signal_index,
+        profile_data,
+        candidate_source=candidate_source,
+    )
+
+
+def build_source_coverage_report_from_parsed_text(
+    parsed_text: str | None,
+    profile_data: Mapping[str, Any] | None,
+    *,
+    candidate_source: str = "source_coverage_report",
+) -> dict[str, Any] | None:
+    """Build the coverage report directly from persisted source-resume text."""
+    source_text = str(parsed_text or "").strip()
+    if not source_text:
+        return None
+    return build_source_coverage_report_from_profile_data(
+        build_source_signal_index(source_text),
         profile_data,
         candidate_source=candidate_source,
     )

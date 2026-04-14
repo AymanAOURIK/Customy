@@ -18,6 +18,7 @@ from app.onboarding import (
 )
 from app.onboarding_db import (
     get_onboarding_draft as get_onboarding_draft_db,
+    get_resume_upload,
     insert_resume_upload,
     update_resume_upload_parsed,
     upsert_onboarding_draft,
@@ -25,6 +26,7 @@ from app.onboarding_db import (
 from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_quality import build_profile_quality_report
 from app.resume_parser import extract_text as extract_resume_text
+from app.source_coverage_report import build_source_coverage_report_from_parsed_text
 from app.storage_cloud import upload_bytes_at_path
 
 _log = logging.getLogger("app.server")
@@ -49,6 +51,52 @@ def _draft_profile_enrichment_plan(
         report,
         draft_data or {},
         candidate_source="onboarding_draft",
+    )
+
+
+def _safe_source_coverage_report(
+    parsed_text: str | None,
+    candidate_data: dict | None,
+    *,
+    candidate_source: str,
+    log_event: str,
+) -> dict[str, object] | None:
+    try:
+        return build_source_coverage_report_from_parsed_text(
+            parsed_text,
+            candidate_data or {},
+            candidate_source=candidate_source,
+        )
+    except Exception:
+        _log.exception("%s source_coverage_report_failed", log_event)
+        return None
+
+
+def _draft_source_coverage_report(
+    user_id: str,
+    draft: dict | None,
+) -> dict[str, object] | None:
+    if draft is None:
+        return None
+    upload_id = str(draft.get("source_resume_upload_id") or "").strip()
+    if not upload_id:
+        return None
+    try:
+        upload_row = get_resume_upload(user_id, upload_id)
+    except Exception:
+        _log.exception(
+            "onboarding_draft.get_resume_upload_failed user_id=%s upload_id=%s",
+            user_id,
+            upload_id,
+        )
+        return None
+    if upload_row is None:
+        return None
+    return _safe_source_coverage_report(
+        upload_row.get("parsed_text"),
+        draft.get("draft_data") or {},
+        candidate_source="onboarding_draft",
+        log_event="onboarding_draft.get",
     )
 
 
@@ -101,10 +149,14 @@ def _resume_upload_error_payload(
     return HTTPStatus(status), payload
 
 
-def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
+def _onboarding_draft_payload(
+    draft: dict | None,
+    *,
+    source_coverage_report: dict[str, object] | None = None,
+) -> dict[str, object]:
     if draft is None:
         quality_report = _draft_profile_quality_report({})
-        return {
+        payload: dict[str, object] = {
             "exists": False,
             "status": "empty",
             "draft_data": {},
@@ -112,9 +164,12 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
             "profile_quality_report": quality_report,
             "profile_enrichment_plan": _draft_profile_enrichment_plan({}, quality_report),
         }
+        if source_coverage_report is not None:
+            payload["source_coverage_report"] = source_coverage_report
+        return payload
     draft_data = draft.get("draft_data") or {}
     quality_report = _draft_profile_quality_report(draft_data)
-    return {
+    payload = {
         "exists": True,
         "id": str(draft.get("id") or ""),
         "status": str(draft.get("status") or "draft"),
@@ -129,6 +184,9 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
         "profile_quality_report": quality_report,
         "profile_enrichment_plan": _draft_profile_enrichment_plan(draft_data, quality_report),
     }
+    if source_coverage_report is not None:
+        payload["source_coverage_report"] = source_coverage_report
+    return payload
 
 
 def _record_onboarding_usage(
@@ -242,7 +300,9 @@ def handle_onboarding_draft_get(handler: BaseHTTPRequestHandler, cfg: dict) -> N
             user_id,
             draft.get("status"),
         )
-    send_json(handler, HTTPStatus.OK, _onboarding_draft_payload(draft))
+    source_coverage_report = _draft_source_coverage_report(user_id, draft)
+    draft_payload = _onboarding_draft_payload(draft, source_coverage_report=source_coverage_report)
+    send_json(handler, HTTPStatus.OK, draft_payload)
 
 
 def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -416,6 +476,12 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         draft_data, gap_analysis, usage_summary = onboarding_extract_draft(parsed_text, cfg)
         profile_quality_report = _draft_profile_quality_report(draft_data)
+        source_coverage_report = _safe_source_coverage_report(
+            parsed_text,
+            draft_data,
+            candidate_source="onboarding_draft",
+            log_event="resume_upload",
+        )
         _log.info(
             "resume_upload.draft_extracted user_id=%s upload_id=%s experiences=%d skill_count=%s",
             user_id,
@@ -484,29 +550,35 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         )
         send_json(handler, status, payload)
         return
-    draft_payload = _onboarding_draft_payload(draft_row)
+    draft_payload = _onboarding_draft_payload(
+        draft_row,
+        source_coverage_report=source_coverage_report,
+    )
     draft_payload["profile_quality_report"] = profile_quality_report
     draft_payload["profile_enrichment_plan"] = _draft_profile_enrichment_plan(draft_data, profile_quality_report)
+    response_payload: dict[str, object] = {
+        "ok": True,
+        "upload": {
+            "id": upload_id,
+            "filename": filename,
+            "extension": extension,
+            "content_type": storage_content_type,
+            "storage_path": storage_path,
+            "file_size_bytes": len(file_bytes),
+            "parse_path": parse_path,
+            "text_length": len(parsed_text),
+            "parse_status": "done",
+        },
+        "draft": draft_payload,
+        "draft_data": draft_payload.get("draft_data", {}),
+        "gap_analysis": draft_payload.get("gap_analysis", {}),
+        "profile_quality_report": profile_quality_report,
+        "profile_enrichment_plan": draft_payload.get("profile_enrichment_plan", {}),
+    }
+    if source_coverage_report is not None:
+        response_payload["source_coverage_report"] = source_coverage_report
     send_json(
         handler,
         HTTPStatus.OK,
-        {
-            "ok": True,
-            "upload": {
-                "id": upload_id,
-                "filename": filename,
-                "extension": extension,
-                "content_type": storage_content_type,
-                "storage_path": storage_path,
-                "file_size_bytes": len(file_bytes),
-                "parse_path": parse_path,
-                "text_length": len(parsed_text),
-                "parse_status": "done",
-            },
-            "draft": draft_payload,
-            "draft_data": draft_payload.get("draft_data", {}),
-            "gap_analysis": draft_payload.get("gap_analysis", {}),
-            "profile_quality_report": profile_quality_report,
-            "profile_enrichment_plan": draft_payload.get("profile_enrichment_plan", {}),
-        },
+        response_payload,
     )

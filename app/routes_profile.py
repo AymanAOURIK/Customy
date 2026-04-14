@@ -18,9 +18,11 @@ from typing import Any
 from app.auth import AuthError, require_auth
 from app.candidate_context import build_candidate_context_from_profile_data
 from app.http_utils import read_json_body, send_json
+from app.onboarding_db import get_onboarding_draft as get_onboarding_draft_db, get_resume_upload
 from app.profile_db import create_profile, get_profile, update_profile, upsert_profile
 from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_quality import build_profile_quality_report
+from app.source_coverage_report import build_source_coverage_report_from_parsed_text
 from app.text_utils import sanitize_data_strings
 
 _log = logging.getLogger(__name__)
@@ -71,10 +73,40 @@ def _profile_reports(
     return body, quality_report, enrichment_plan
 
 
-def _profile_response(profile: dict[str, Any]) -> dict[str, Any]:
+def _source_coverage_report_for_profile(
+    user_id: str,
+    profile_data: dict[str, Any] | None,
+) -> dict[str, object] | None:
+    try:
+        draft = get_onboarding_draft_db(user_id)
+        if draft is None:
+            return None
+        upload_id = str(draft.get("source_resume_upload_id") or "").strip()
+        if not upload_id:
+            return None
+        upload_row = get_resume_upload(user_id, upload_id)
+        if upload_row is None:
+            return None
+        return build_source_coverage_report_from_parsed_text(
+            upload_row.get("parsed_text"),
+            profile_data or {},
+            candidate_source="postgres",
+        )
+    except Exception:
+        _log.exception("profile.source_coverage_report_failed user_id=%s", user_id)
+        return None
+
+
+def _profile_response(
+    profile: dict[str, Any],
+    *,
+    source_coverage_report: dict[str, object] | None = None,
+) -> dict[str, Any]:
     body, quality_report, enrichment_plan = _profile_reports(profile)
     body["profile_quality_report"] = quality_report
     body["profile_enrichment_plan"] = enrichment_plan
+    if source_coverage_report is not None:
+        body["source_coverage_report"] = source_coverage_report
     return body
 
 
@@ -99,12 +131,13 @@ def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[s
         "scoring_keywords": [],
     }
     _, quality_report, enrichment_plan = _profile_reports(profile)
-    return {
+    payload = {
         "exists": False,
         "profile": profile,
         "profile_quality_report": quality_report,
         "profile_enrichment_plan": enrichment_plan,
     }
+    return payload
 
 
 def _sanitize_profile_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -122,19 +155,27 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     profile = get_profile(user_id)
     if profile is None:
         _log.info("profile.get empty_state user_id=%s", user_id)
-        send_json(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
+        payload = _empty_profile_payload(user_id, auth_payload)
+        source_coverage_report = _source_coverage_report_for_profile(user_id, payload["profile"])
+        if source_coverage_report is not None:
+            payload["source_coverage_report"] = source_coverage_report
+        send_json(handler, HTTPStatus.OK, payload)
         return
     _log.info("profile.get found user_id=%s", user_id)
     profile_body, quality_report, enrichment_plan = _profile_reports(profile)
+    source_coverage_report = _source_coverage_report_for_profile(user_id, profile_body)
+    payload: dict[str, Any] = {
+        "exists": True,
+        "profile": profile_body,
+        "profile_quality_report": quality_report,
+        "profile_enrichment_plan": enrichment_plan,
+    }
+    if source_coverage_report is not None:
+        payload["source_coverage_report"] = source_coverage_report
     send_json(
         handler,
         HTTPStatus.OK,
-        {
-            "exists": True,
-            "profile": profile_body,
-            "profile_quality_report": quality_report,
-            "profile_enrichment_plan": enrichment_plan,
-        },
+        payload,
     )
 
 
@@ -169,7 +210,14 @@ def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
 
     _log.info("profile.create created user_id=%s", user_id)
-    send_json(handler, HTTPStatus.CREATED, _profile_response(profile))
+    send_json(
+        handler,
+        HTTPStatus.CREATED,
+        _profile_response(
+            profile,
+            source_coverage_report=_source_coverage_report_for_profile(user_id, profile),
+        ),
+    )
 
 
 def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -205,4 +253,11 @@ def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
-    send_json(handler, status, _profile_response(profile))
+    send_json(
+        handler,
+        status,
+        _profile_response(
+            profile,
+            source_coverage_report=_source_coverage_report_for_profile(user_id, profile),
+        ),
+    )
