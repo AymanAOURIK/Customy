@@ -35,6 +35,7 @@ from app.storage_cloud import get_signed_url_for_path
 from app.onboarding_db import get_onboarding_draft as get_onboarding_draft_db
 from app.auth import AuthError, require_auth
 from app.profile_db import get_profile, profile_to_candidate_context
+from app.profile_readiness import evaluate_saved_profile_readiness
 from app.db_postgres import (
     get_analytics as pg_get_analytics,
     get_application as pg_get_application,
@@ -541,6 +542,19 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                                 "has_onboarding_draft": has_onboarding_draft,
                             },
                         )
+                        return
+                    readiness = evaluate_saved_profile_readiness(profile)
+                    readiness_gate = readiness["profile_readiness_gate"]
+                    if readiness_gate.get("decision") == "blocked":
+                        quality_report = readiness["profile_quality_report"]
+                        _log.warning(
+                            "generate.blocked_profile_readiness user_id=%s status=%s blockers=%s warnings=%s",
+                            user_id,
+                            readiness_gate.get("status"),
+                            len(quality_report.get("blockers") or []),
+                            len(quality_report.get("warnings") or []),
+                        )
+                        self._json(HTTPStatus.UNPROCESSABLE_ENTITY, readiness)
                         return
                     candidate_context = profile_to_candidate_context(profile)
                 else:
