@@ -20,6 +20,7 @@ from app.db_postgres import (
 )
 from app.generator import PackGenerationError, generate_pack
 from app.latex import compile_pdf, render_tex
+from app.resume_fullness_risk import evaluate_resume_fullness_risk
 from app.storage import make_slug, write_pack
 from app.storage_cloud import upload_pack_files
 from app.targeting import candidate_keywords_from_profile
@@ -45,6 +46,7 @@ class GenerationResult:
     tokens_used: int
     usage_summary: dict
     pack: object
+    resume_fullness_risk: dict
     files: dict
     cloud_paths: dict | None
 
@@ -157,6 +159,11 @@ def run_generation(
         _updated_resume_keywords(pack, initial_analysis, candidate_context),
         application_url=application_url,
     )
+    resume_fullness_risk = evaluate_resume_fullness_risk(
+        candidate_context,
+        pack,
+        jd_analysis=initial_analysis,
+    )
     tokens_used = int(usage_summary.get("total_tokens") or 0)
     model_used = str(usage_summary.get("model_used") or cfg["llm"]["model"])
     company = _pick_company_name(initial_analysis.get("company"), detected_company) or "Unknown Company"
@@ -189,6 +196,7 @@ def run_generation(
                 usage_summary=usage_summary,
                 initial_analysis=initial_analysis,
                 updated_analysis=updated_analysis,
+                resume_fullness_risk=resume_fullness_risk,
             )
         except FileExistsError:
             last_slug_error = f"Output folder already exists for slug {slug}."
@@ -324,6 +332,7 @@ def run_generation(
         tokens_used=tokens_used,
         usage_summary=usage_summary,
         pack=pack,
+        resume_fullness_risk=resume_fullness_risk,
         files=files,
         cloud_paths=cloud_paths,
     )

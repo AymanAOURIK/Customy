@@ -610,6 +610,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         "analysis": result.initial_analysis,
                         "initial_analysis": result.initial_analysis,
                         "updated_analysis": result.updated_analysis,
+                        "resume_fullness_risk": result.resume_fullness_risk,
                         "pack": result.pack.model_dump(),
                         "files": _serialize_files(
                             result.slug,

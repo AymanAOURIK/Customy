@@ -76,6 +76,7 @@ def write_pack(
     usage_summary: dict | None = None,
     initial_analysis: dict | None = None,
     updated_analysis: dict | None = None,
+    resume_fullness_risk: dict | None = None,
 ) -> dict:
     """
     Creates <configured applications_dir>/<slug>/
@@ -109,6 +110,7 @@ def write_pack(
                 },
                 "initial_analysis": initial_analysis or {},
                 "updated_analysis": updated_analysis or {},
+                "resume_fullness_risk": resume_fullness_risk or {},
                 "usage": usage_summary or {},
                 "pack": pack.model_dump(),
             },
