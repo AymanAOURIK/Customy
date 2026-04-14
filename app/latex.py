@@ -367,15 +367,14 @@ def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = No
 
     pdf_path = out_dir / f"{tex_file.stem}.pdf"
     if result.returncode != 0 or not pdf_path.exists():
-        # Extract the first error line from pdflatex output for a focused diagnosis
         raw_output = "\n".join(part for part in [result.stdout.strip(), result.stderr.strip()] if part)
-        error_lines = [ln for ln in raw_output.splitlines() if ln.startswith("!") or "Error" in ln or "error" in ln]
-        excerpt = "\n".join(error_lines[:10]) if error_lines else raw_output[:500]
+        all_lines = raw_output.splitlines()
+        tail = "\n".join(all_lines[-100:]) if len(all_lines) > 100 else raw_output
         _log.error(
-            "compile_pdf: pdflatex failed returncode=%d pdf_exists=%s\nFirst error lines:\n%s",
+            "compile_pdf: pdflatex failed returncode=%d pdf_exists=%s\nFull output (last 100 lines):\n%s",
             result.returncode,
             pdf_path.exists(),
-            excerpt,
+            tail,
         )
         if raw_output:
             print(raw_output, file=sys.stderr)
