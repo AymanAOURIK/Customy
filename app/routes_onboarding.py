@@ -22,6 +22,7 @@ from app.onboarding_db import (
     update_resume_upload_parsed,
     upsert_onboarding_draft,
 )
+from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_quality import build_profile_quality_report
 from app.resume_parser import extract_text as extract_resume_text
 from app.storage_cloud import upload_bytes_at_path
@@ -37,6 +38,18 @@ def _draft_profile_quality_report(draft_data: dict | None) -> dict[str, object]:
         candidate_source="onboarding_draft",
     )
     return build_profile_quality_report(candidate_context)
+
+
+def _draft_profile_enrichment_plan(
+    draft_data: dict | None,
+    profile_quality_report: dict[str, object] | None = None,
+) -> dict[str, object]:
+    report = profile_quality_report or _draft_profile_quality_report(draft_data)
+    return build_profile_enrichment_plan(
+        report,
+        draft_data or {},
+        candidate_source="onboarding_draft",
+    )
 
 
 def dispatch_onboarding_get(handler: BaseHTTPRequestHandler, path: str, cfg: dict) -> bool:
@@ -90,14 +103,17 @@ def _resume_upload_error_payload(
 
 def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
     if draft is None:
+        quality_report = _draft_profile_quality_report({})
         return {
             "exists": False,
             "status": "empty",
             "draft_data": {},
             "gap_analysis": {},
-            "profile_quality_report": _draft_profile_quality_report({}),
+            "profile_quality_report": quality_report,
+            "profile_enrichment_plan": _draft_profile_enrichment_plan({}, quality_report),
         }
     draft_data = draft.get("draft_data") or {}
+    quality_report = _draft_profile_quality_report(draft_data)
     return {
         "exists": True,
         "id": str(draft.get("id") or ""),
@@ -110,7 +126,8 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
         "updated_at": str(draft.get("updated_at") or ""),
         "draft_data": draft_data,
         "gap_analysis": draft.get("gap_analysis") or {},
-        "profile_quality_report": _draft_profile_quality_report(draft_data),
+        "profile_quality_report": quality_report,
+        "profile_enrichment_plan": _draft_profile_enrichment_plan(draft_data, quality_report),
     }
 
 
@@ -469,6 +486,7 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
     draft_payload = _onboarding_draft_payload(draft_row)
     draft_payload["profile_quality_report"] = profile_quality_report
+    draft_payload["profile_enrichment_plan"] = _draft_profile_enrichment_plan(draft_data, profile_quality_report)
     send_json(
         handler,
         HTTPStatus.OK,
@@ -489,5 +507,6 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
             "draft_data": draft_payload.get("draft_data", {}),
             "gap_analysis": draft_payload.get("gap_analysis", {}),
             "profile_quality_report": profile_quality_report,
+            "profile_enrichment_plan": draft_payload.get("profile_enrichment_plan", {}),
         },
     )

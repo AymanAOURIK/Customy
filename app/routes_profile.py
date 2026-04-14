@@ -19,6 +19,7 @@ from app.auth import AuthError, require_auth
 from app.candidate_context import build_candidate_context_from_profile_data
 from app.http_utils import read_json_body, send_json
 from app.profile_db import create_profile, get_profile, update_profile, upsert_profile
+from app.profile_enrichment import build_profile_enrichment_plan
 from app.profile_quality import build_profile_quality_report
 from app.text_utils import sanitize_data_strings
 
@@ -49,9 +50,23 @@ def _profile_quality_report(profile_data: dict[str, Any]) -> dict[str, object]:
     return build_profile_quality_report(candidate_context)
 
 
+def _profile_enrichment_plan(
+    profile_data: dict[str, Any],
+    profile_quality_report: dict[str, object] | None = None,
+) -> dict[str, object]:
+    report = profile_quality_report or _profile_quality_report(profile_data)
+    return build_profile_enrichment_plan(
+        report,
+        profile_data,
+        candidate_source="postgres",
+    )
+
+
 def _profile_response(profile: dict[str, Any]) -> dict[str, Any]:
     body = dict(profile or {})
-    body["profile_quality_report"] = _profile_quality_report(body)
+    quality_report = _profile_quality_report(body)
+    body["profile_quality_report"] = quality_report
+    body["profile_enrichment_plan"] = _profile_enrichment_plan(body, quality_report)
     return body
 
 
@@ -79,6 +94,7 @@ def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[s
         "exists": False,
         "profile": profile,
         "profile_quality_report": _profile_quality_report(profile),
+        "profile_enrichment_plan": _profile_enrichment_plan(profile),
     }
 
 
@@ -107,6 +123,7 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
             "exists": True,
             "profile": profile,
             "profile_quality_report": _profile_quality_report(profile),
+            "profile_enrichment_plan": _profile_enrichment_plan(profile),
         },
     )
 
