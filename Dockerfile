@@ -8,7 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-recommended \
     texlive-font-utils \
     texlive-lang-french \
+    lmodern \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify lmodern.sty is present — build fails here if the package is missing
+RUN kpsewhich lmodern.sty
 
 WORKDIR /app
 

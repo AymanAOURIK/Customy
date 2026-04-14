@@ -343,6 +343,8 @@ def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = No
         return None
 
     _log.info("compile_pdf: pdflatex found at %s", pdflatex_bin)
+    kpse = subprocess.run(["kpsewhich", "lmodern.sty"], capture_output=True, text=True, check=False)
+    _log.info("compile_pdf: kpsewhich lmodern → %s", kpse.stdout.strip() or "(not found)")
     tex_file = Path(tex_path).resolve()
     out_dir = Path(output_dir).resolve()
     _log.info("compile_pdf: compiling %s → %s", tex_file, out_dir)
