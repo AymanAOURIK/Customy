@@ -55,21 +55,28 @@ def _profile_quality_report(profile_data: dict[str, Any]) -> dict[str, object]:
 def _profile_enrichment_plan(
     profile_data: dict[str, Any],
     profile_quality_report: dict[str, object] | None = None,
+    source_coverage_report: dict[str, object] | None = None,
 ) -> dict[str, object]:
     report = profile_quality_report or _profile_quality_report(profile_data)
     return build_profile_enrichment_plan(
         report,
         profile_data,
+        source_coverage_report=source_coverage_report,
         candidate_source="postgres",
     )
 
 
 def _profile_reports(
     profile_data: dict[str, Any] | None,
+    source_coverage_report: dict[str, object] | None = None,
 ) -> tuple[dict[str, Any], dict[str, object], dict[str, object]]:
     body = dict(profile_data or {})
     quality_report = _profile_quality_report(body)
-    enrichment_plan = _profile_enrichment_plan(body, quality_report)
+    enrichment_plan = _profile_enrichment_plan(
+        body,
+        quality_report,
+        source_coverage_report=source_coverage_report,
+    )
     return body, quality_report, enrichment_plan
 
 
@@ -102,7 +109,10 @@ def _profile_response(
     *,
     source_coverage_report: dict[str, object] | None = None,
 ) -> dict[str, Any]:
-    body, quality_report, enrichment_plan = _profile_reports(profile)
+    body, quality_report, enrichment_plan = _profile_reports(
+        profile,
+        source_coverage_report=source_coverage_report,
+    )
     body["profile_quality_report"] = quality_report
     body["profile_enrichment_plan"] = enrichment_plan
     if source_coverage_report is not None:
@@ -159,11 +169,19 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         source_coverage_report = _source_coverage_report_for_profile(user_id, payload["profile"])
         if source_coverage_report is not None:
             payload["source_coverage_report"] = source_coverage_report
+            payload["profile_enrichment_plan"] = _profile_enrichment_plan(
+                payload["profile"],
+                payload["profile_quality_report"],
+                source_coverage_report=source_coverage_report,
+            )
         send_json(handler, HTTPStatus.OK, payload)
         return
     _log.info("profile.get found user_id=%s", user_id)
-    profile_body, quality_report, enrichment_plan = _profile_reports(profile)
-    source_coverage_report = _source_coverage_report_for_profile(user_id, profile_body)
+    source_coverage_report = _source_coverage_report_for_profile(user_id, profile)
+    profile_body, quality_report, enrichment_plan = _profile_reports(
+        profile,
+        source_coverage_report=source_coverage_report,
+    )
     payload: dict[str, Any] = {
         "exists": True,
         "profile": profile_body,

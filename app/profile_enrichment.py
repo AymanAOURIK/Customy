@@ -16,7 +16,7 @@ from app.profile_quality import (
 from app.schemas import EMAIL_PATTERN, NUMERIC_FACT_PATTERN, TECH_TERM_PATTERN
 from app.text_utils import clean_text as _clean_text
 
-PLAN_VERSION = "profile_enrichment_plan.v1"
+PLAN_VERSION = "profile_enrichment_plan.v2"
 
 _RECOGNIZED_STATUSES = {"blocked", "review", "ready"}
 _CLASSIFICATION_COUNTS = {
@@ -35,16 +35,18 @@ def build_profile_enrichment_plan(
     profile_quality_report: Mapping[str, Any] | None,
     profile_data: Mapping[str, Any] | None = None,
     *,
+    source_coverage_report: Mapping[str, Any] | None = None,
     candidate_source: str = "profile_enrichment",
 ) -> dict[str, object]:
     """Map quality-report issues to deterministic enrichment targets."""
     report = profile_quality_report if isinstance(profile_quality_report, Mapping) else {}
+    source_report = source_coverage_report if isinstance(source_coverage_report, Mapping) else {}
     candidate_context = build_candidate_context_from_profile_data(
         profile_data,
         candidate_source=candidate_source,
     )
     issues = _issue_index(report)
-    signals = _build_plan_signals(candidate_context, report)
+    signals = _build_plan_signals(candidate_context, report, source_report)
 
     targets: list[dict[str, Any]] = []
     _append_if_present(targets, _build_full_name_target(issues))
@@ -78,6 +80,14 @@ def build_profile_enrichment_plan(
         "plan_version": PLAN_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_report_version": _clean_text(report.get("report_version")),
+        "quality_report_version": _clean_text(report.get("report_version")),
+        "source_coverage_report_version": signals["source_coverage_report_version"],
+        "source_index_version": signals["source_index_version"],
+        "source_awareness": {
+            "enabled": signals["source_coverage_available"],
+            "overall_status": signals["source_coverage_status"],
+            "gap_counts": dict(signals["source_gap_counts"]),
+        },
         "overall_status": overall_status,
         "summary": {
             "total_targets": len(targets),
@@ -89,13 +99,94 @@ def build_profile_enrichment_plan(
     }
 
 
-def _build_plan_signals(candidate_context: Mapping[str, Any], report: Mapping[str, Any]) -> dict[str, Any]:
+def _build_plan_signals(
+    candidate_context: Mapping[str, Any],
+    report: Mapping[str, Any],
+    source_coverage_report: Mapping[str, Any],
+) -> dict[str, Any]:
     experiences = _ordered_experiences(candidate_context.get("experiences"))
     recent_experiences = _recent_substantive_experiences(experiences, limit=2)
     all_bullets = _collect_bullets(experiences)
     recent_bullets = _collect_bullets(recent_experiences)
     hard_skill_terms = _hard_skill_terms(candidate_context)
     source_resume_text = _clean_text(candidate_context.get("source_resume_text"))
+    source_report = source_coverage_report if isinstance(source_coverage_report, Mapping) else {}
+    source_experience_matches = _mapping_records(source_report.get("experience_matches"))
+    missing_source_experiences = _mapping_records(source_report.get("missing_source_experiences"))
+    missing_optional_sections = _mapping_records(source_report.get("missing_optional_sections"))
+    missing_tool_terms = _mapping_records(source_report.get("missing_tool_terms"))
+    missing_metric_evidence = _mapping_records(source_report.get("missing_metric_evidence"))
+    recent_source_positions = _recent_source_positions(
+        source_report,
+        source_experience_matches=source_experience_matches,
+        missing_source_experiences=missing_source_experiences,
+        missing_tool_terms=missing_tool_terms,
+        missing_metric_evidence=missing_metric_evidence,
+    )
+    recent_source_position_set = set(recent_source_positions)
+    missing_recent_source_experiences = [
+        item
+        for item in missing_source_experiences
+        if _source_position(item.get("source_experience_position")) in recent_source_position_set
+    ]
+    missing_recent_metric_evidence = [
+        item
+        for item in missing_metric_evidence
+        if _source_position(item.get("experience_position")) in recent_source_position_set
+    ]
+    missing_recent_tool_terms = [
+        item
+        for item in missing_tool_terms
+        if recent_source_position_set & set(_source_position_list(item.get("experience_positions")))
+    ]
+    missing_recent_metric_from_unmatched_roles = [
+        item
+        for item in missing_recent_source_experiences
+        if _safe_int(item.get("metric_line_count")) > 0
+    ]
+    missing_recent_tool_from_unmatched_roles = [
+        item
+        for item in missing_recent_source_experiences
+        if _clean_string_count(item.get("tool_terms")) > 0
+    ]
+    missing_recent_metric_evidence_count = (
+        len(missing_recent_metric_evidence)
+        + len(missing_recent_metric_from_unmatched_roles)
+    )
+    missing_recent_tool_evidence_count = (
+        len(missing_recent_tool_terms)
+        + len(missing_recent_tool_from_unmatched_roles)
+        + sum(1 for item in missing_recent_metric_evidence if _clean_string_count(item.get("tool_terms")) > 0)
+    )
+    source_gap_counts = {
+        "missing_source_experiences": _source_count(
+            source_report,
+            "missing_source_experience_entries",
+            fallback=len(missing_source_experiences),
+        ),
+        "missing_optional_sections": _source_count(
+            source_report,
+            "missing_optional_sections",
+            fallback=len(missing_optional_sections),
+        ),
+        "missing_tool_terms": _source_count(
+            source_report,
+            "missing_tool_terms",
+            fallback=len(missing_tool_terms),
+        ),
+        "missing_metric_evidence": _source_count(
+            source_report,
+            "missing_metric_lines",
+            fallback=len(missing_metric_evidence),
+        ),
+    }
+    has_recent_metric_source_gap = missing_recent_metric_evidence_count > 0
+    has_recent_tool_source_gap = missing_recent_tool_evidence_count > 0
+    has_recent_role_source_gap = bool(
+        missing_recent_source_experiences
+        or has_recent_metric_source_gap
+        or has_recent_tool_source_gap
+    )
 
     return {
         "experience_count": len(experiences),
@@ -142,6 +233,27 @@ def _build_plan_signals(candidate_context: Mapping[str, Any], report: Mapping[st
                 if _bullet_has_named_system_or_tool(bullet, hard_skill_terms)
             )
         ),
+        "source_coverage_available": bool(source_report),
+        "source_coverage_report_version": _clean_text(source_report.get("report_version")),
+        "source_index_version": _clean_text(source_report.get("source_index_version")),
+        "source_coverage_status": _clean_text(source_report.get("overall_status")).lower(),
+        "source_gap_counts": source_gap_counts,
+        "recent_source_positions": recent_source_positions,
+        "missing_recent_source_experience_count": len(missing_recent_source_experiences),
+        "missing_recent_metric_evidence_count": missing_recent_metric_evidence_count,
+        "missing_recent_tool_evidence_count": missing_recent_tool_evidence_count,
+        "has_experience_source_recovery_signal": bool(
+            _source_count(source_report, "source_experience_entries", fallback=0) > 0
+        ),
+        "has_recent_role_source_gap": has_recent_role_source_gap,
+        "has_recent_metric_source_gap": has_recent_metric_source_gap,
+        "has_recent_tool_source_gap": has_recent_tool_source_gap,
+        "has_keyword_source_gap": source_gap_counts["missing_tool_terms"] > 0,
+        "has_positioning_source_gap": bool(
+            source_gap_counts["missing_source_experiences"] > 0
+            or source_gap_counts["missing_tool_terms"] > 0
+            or source_gap_counts["missing_metric_evidence"] > 0
+        ),
     }
 
 
@@ -171,7 +283,12 @@ def _build_experience_foundation_target(
     if not matched:
         return None
 
-    if signals["has_source_resume_text"]:
+    if signals["source_coverage_available"]:
+        has_recovery_signal = signals["has_experience_source_recovery_signal"]
+    else:
+        has_recovery_signal = signals["has_source_resume_text"]
+
+    if has_recovery_signal:
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_experience_history_from_source"
         instruction = (
@@ -199,6 +316,8 @@ def _build_experience_foundation_target(
         context={
             "experience_count": signals["experience_count"],
             "total_bullets": signals["total_bullets"],
+            "source_aware": signals["source_coverage_available"],
+            "missing_source_experience_count": signals["source_gap_counts"]["missing_source_experiences"],
         },
     )
 
@@ -216,7 +335,12 @@ def _build_recent_role_depth_target(
     if not matched:
         return None
 
-    if signals["has_source_resume_text"]:
+    if signals["source_coverage_available"]:
+        has_recovery_signal = signals["has_recent_role_source_gap"]
+    else:
+        has_recovery_signal = signals["has_source_resume_text"]
+
+    if has_recovery_signal:
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_recent_role_depth_from_source"
         instruction = (
@@ -246,6 +370,10 @@ def _build_recent_role_depth_target(
             "recent_two_roles_bullet_count": signals["recent_two_roles_bullet_count"],
             "minimum_required": 4,
             "recommended_minimum": 7,
+            "source_aware": signals["source_coverage_available"],
+            "missing_recent_source_experience_count": signals["missing_recent_source_experience_count"],
+            "missing_recent_metric_evidence_count": signals["missing_recent_metric_evidence_count"],
+            "missing_recent_tool_evidence_count": signals["missing_recent_tool_evidence_count"],
         },
     )
 
@@ -263,7 +391,12 @@ def _build_recent_metric_target(
     if not matched:
         return None
 
-    if signals["has_source_metrics"]:
+    if signals["source_coverage_available"]:
+        has_recovery_signal = signals["has_recent_metric_source_gap"]
+    else:
+        has_recovery_signal = signals["has_source_metrics"]
+
+    if has_recovery_signal:
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_recent_role_metrics_from_source"
         instruction = (
@@ -293,6 +426,8 @@ def _build_recent_metric_target(
             "recent_metric_bearing_bullets": signals["recent_metric_bearing_bullets"],
             "metric_bearing_bullets": signals["metric_bearing_bullets"],
             "recommended_recent_minimum": 2,
+            "source_aware": signals["source_coverage_available"],
+            "missing_metric_evidence_count": signals["source_gap_counts"]["missing_metric_evidence"],
         },
     )
 
@@ -310,7 +445,12 @@ def _build_recent_named_system_target(
     if not matched:
         return None
 
-    if signals["has_source_tech_terms"] or signals["hard_skill_count"] > 0:
+    if signals["source_coverage_available"]:
+        has_recovery_signal = signals["has_recent_tool_source_gap"]
+    else:
+        has_recovery_signal = signals["has_source_tech_terms"] or signals["hard_skill_count"] > 0
+
+    if has_recovery_signal:
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_recent_role_tools_from_profile_and_source"
         instruction = (
@@ -340,6 +480,8 @@ def _build_recent_named_system_target(
             "recent_named_system_or_tool_bullets": signals["recent_named_system_or_tool_bullets"],
             "named_system_or_tool_bullets": signals["named_system_or_tool_bullets"],
             "recommended_recent_minimum": 2,
+            "source_aware": signals["source_coverage_available"],
+            "missing_recent_tool_evidence_count": signals["missing_recent_tool_evidence_count"],
         },
     )
 
@@ -357,7 +499,28 @@ def _build_scoring_keywords_target(
     if not matched:
         return None
 
-    if signals["has_structured_keyword_signal"]:
+    if signals["source_coverage_available"]:
+        if signals["has_keyword_source_gap"]:
+            classification = "recover_from_source_with_confirmation"
+            action_key = "recover_scoring_keywords_from_source"
+            instruction = (
+                "Recover source terms that are missing from the structured profile, "
+                "then ask the user to confirm which ones should become scoring keywords."
+            )
+        elif signals["has_structured_keyword_signal"]:
+            classification = "auto_derive"
+            action_key = "derive_scoring_keywords_from_profile_signals"
+            instruction = (
+                "Derive a grounded scoring keyword list from the structured skill inventory, recent role titles, "
+                "and technical evidence already present in the profile."
+            )
+        else:
+            classification = "ask_user"
+            action_key = "collect_scoring_keywords_from_user"
+            instruction = (
+                "Ask the user for 5 to 10 keywords that best describe their expertise and target positions."
+            )
+    elif signals["has_structured_keyword_signal"]:
         classification = "auto_derive"
         action_key = "derive_scoring_keywords_from_profile_signals"
         instruction = (
@@ -392,6 +555,8 @@ def _build_scoring_keywords_target(
             "scoring_keyword_count": signals["scoring_keyword_count"],
             "hard_skill_count": signals["hard_skill_count"],
             "recommended_minimum": 8,
+            "source_aware": signals["source_coverage_available"],
+            "missing_tool_term_count": signals["source_gap_counts"]["missing_tool_terms"],
         },
     )
 
@@ -404,7 +569,28 @@ def _build_hard_skill_inventory_target(
     if not matched:
         return None
 
-    if signals["has_structured_keyword_signal"]:
+    if signals["source_coverage_available"]:
+        if signals["has_keyword_source_gap"]:
+            classification = "recover_from_source_with_confirmation"
+            action_key = "recover_hard_skill_inventory_from_source"
+            instruction = (
+                "Recover hard-skill signals that are missing from the structured profile, "
+                "then ask the user to confirm which tools and frameworks belong in the inventory."
+            )
+        elif signals["has_structured_keyword_signal"]:
+            classification = "auto_derive"
+            action_key = "derive_hard_skill_inventory_from_profile_signals"
+            instruction = (
+                "Derive a fuller hard-skill inventory from named tools, technologies, and repeated technical signals "
+                "already present in the structured profile."
+            )
+        else:
+            classification = "ask_user"
+            action_key = "collect_hard_skill_inventory_from_user"
+            instruction = (
+                "Ask the user to list the main languages, frameworks, platforms, and tools they want reflected in the profile."
+            )
+    elif signals["has_structured_keyword_signal"]:
         classification = "auto_derive"
         action_key = "derive_hard_skill_inventory_from_profile_signals"
         instruction = (
@@ -438,6 +624,8 @@ def _build_hard_skill_inventory_target(
         context={
             "hard_skill_count": signals["hard_skill_count"],
             "recommended_minimum": 8,
+            "source_aware": signals["source_coverage_available"],
+            "missing_tool_term_count": signals["source_gap_counts"]["missing_tool_terms"],
         },
     )
 
@@ -450,7 +638,14 @@ def _build_summary_target(
     if not matched:
         return None
 
-    if signals["has_positioning_signal"]:
+    if signals["source_coverage_available"] and signals["has_positioning_source_gap"]:
+        classification = "recover_from_source_with_confirmation"
+        action_key = "recover_summary_inputs_from_source"
+        instruction = (
+            "Recover missing role, metric, and tool signals from source coverage gaps, "
+            "ask the user to confirm them, then derive the summary from the grounded profile."
+        )
+    elif signals["has_positioning_signal"]:
         classification = "auto_derive"
         action_key = "derive_summary_from_profile_signals"
         instruction = (
@@ -478,6 +673,12 @@ def _build_summary_target(
         context={
             "recent_role_labels": signals["recent_role_labels"],
             "hard_skill_count": signals["hard_skill_count"],
+            "source_aware": signals["source_coverage_available"],
+            "source_positioning_gap_count": (
+                signals["source_gap_counts"]["missing_source_experiences"]
+                + signals["source_gap_counts"]["missing_tool_terms"]
+                + signals["source_gap_counts"]["missing_metric_evidence"]
+            ),
         },
     )
 
@@ -490,7 +691,14 @@ def _build_headline_target(
     if not matched:
         return None
 
-    if signals["has_positioning_signal"]:
+    if signals["source_coverage_available"] and signals["has_positioning_source_gap"]:
+        classification = "recover_from_source_with_confirmation"
+        action_key = "recover_headline_inputs_from_source"
+        instruction = (
+            "Recover missing role, metric, and tool signals from source coverage gaps, "
+            "ask the user to confirm them, then derive the headline from the grounded profile."
+        )
+    elif signals["has_positioning_signal"]:
         classification = "auto_derive"
         action_key = "derive_headline_from_profile_signals"
         instruction = (
@@ -517,6 +725,12 @@ def _build_headline_target(
         context={
             "recent_role_labels": signals["recent_role_labels"],
             "hard_skill_count": signals["hard_skill_count"],
+            "source_aware": signals["source_coverage_available"],
+            "source_positioning_gap_count": (
+                signals["source_gap_counts"]["missing_source_experiences"]
+                + signals["source_gap_counts"]["missing_tool_terms"]
+                + signals["source_gap_counts"]["missing_metric_evidence"]
+            ),
         },
     )
 
@@ -695,10 +909,83 @@ def _unique_clean_count(value: object) -> int:
     return count
 
 
+def _mapping_records(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, Mapping)]
+
+
+def _source_count(source_report: Mapping[str, Any], key: str, *, fallback: int) -> int:
+    counts = source_report.get("counts") if isinstance(source_report.get("counts"), Mapping) else {}
+    value = counts.get(key, fallback)
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return max(int(fallback), 0)
+
+
+def _recent_source_positions(
+    source_report: Mapping[str, Any],
+    *,
+    source_experience_matches: list[dict[str, Any]],
+    missing_source_experiences: list[dict[str, Any]],
+    missing_tool_terms: list[dict[str, Any]],
+    missing_metric_evidence: list[dict[str, Any]],
+) -> list[int]:
+    positions: set[int] = set()
+    for item in source_experience_matches:
+        position = _source_position(item.get("source_experience_position"))
+        if position is not None:
+            positions.add(position)
+    for item in missing_source_experiences:
+        position = _source_position(item.get("source_experience_position"))
+        if position is not None:
+            positions.add(position)
+    for item in missing_metric_evidence:
+        position = _source_position(item.get("experience_position"))
+        if position is not None:
+            positions.add(position)
+    for item in missing_tool_terms:
+        positions.update(_source_position_list(item.get("experience_positions")))
+    if positions:
+        return sorted(positions)[:2]
+    source_experience_entries = _source_count(source_report, "source_experience_entries", fallback=0)
+    return list(range(min(source_experience_entries, 2)))
+
+
+def _source_position(value: object) -> int | None:
+    try:
+        position = int(value)
+    except (TypeError, ValueError):
+        return None
+    if position < 0:
+        return None
+    return position
+
+
+def _source_position_list(value: object) -> list[int]:
+    if isinstance(value, list):
+        positions = [_source_position(item) for item in value]
+        return [item for item in positions if item is not None]
+    return []
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clean_string_count(value: object) -> int:
+    if not isinstance(value, list):
+        return 0
+    return sum(1 for item in value if _clean_text(item))
+
+
 def _experience_label(item: Mapping[str, Any]) -> str:
     role = _clean_text(item.get("role"))
     company = _clean_text(item.get("company"))
     if role and company:
         return f"{role} @ {company}"
     return role or company
-

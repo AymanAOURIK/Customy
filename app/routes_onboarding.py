@@ -45,11 +45,13 @@ def _draft_profile_quality_report(draft_data: dict | None) -> dict[str, object]:
 def _draft_profile_enrichment_plan(
     draft_data: dict | None,
     profile_quality_report: dict[str, object] | None = None,
+    source_coverage_report: dict[str, object] | None = None,
 ) -> dict[str, object]:
     report = profile_quality_report or _draft_profile_quality_report(draft_data)
     return build_profile_enrichment_plan(
         report,
         draft_data or {},
+        source_coverage_report=source_coverage_report,
         candidate_source="onboarding_draft",
     )
 
@@ -162,7 +164,11 @@ def _onboarding_draft_payload(
             "draft_data": {},
             "gap_analysis": {},
             "profile_quality_report": quality_report,
-            "profile_enrichment_plan": _draft_profile_enrichment_plan({}, quality_report),
+            "profile_enrichment_plan": _draft_profile_enrichment_plan(
+                {},
+                quality_report,
+                source_coverage_report=source_coverage_report,
+            ),
         }
         if source_coverage_report is not None:
             payload["source_coverage_report"] = source_coverage_report
@@ -182,7 +188,11 @@ def _onboarding_draft_payload(
         "draft_data": draft_data,
         "gap_analysis": draft.get("gap_analysis") or {},
         "profile_quality_report": quality_report,
-        "profile_enrichment_plan": _draft_profile_enrichment_plan(draft_data, quality_report),
+        "profile_enrichment_plan": _draft_profile_enrichment_plan(
+            draft_data,
+            quality_report,
+            source_coverage_report=source_coverage_report,
+        ),
     }
     if source_coverage_report is not None:
         payload["source_coverage_report"] = source_coverage_report
@@ -555,7 +565,11 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         source_coverage_report=source_coverage_report,
     )
     draft_payload["profile_quality_report"] = profile_quality_report
-    draft_payload["profile_enrichment_plan"] = _draft_profile_enrichment_plan(draft_data, profile_quality_report)
+    draft_payload["profile_enrichment_plan"] = _draft_profile_enrichment_plan(
+        draft_data,
+        profile_quality_report,
+        source_coverage_report=source_coverage_report,
+    )
     response_payload: dict[str, object] = {
         "ok": True,
         "upload": {

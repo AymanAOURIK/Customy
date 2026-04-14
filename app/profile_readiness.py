@@ -35,12 +35,14 @@ def build_profile_readiness_gate(profile_quality_report: Mapping[str, Any] | Non
 def build_saved_profile_enrichment_plan(
     profile_data: Mapping[str, Any] | None,
     profile_quality_report: Mapping[str, Any] | None = None,
+    source_coverage_report: Mapping[str, Any] | None = None,
 ) -> dict[str, object]:
     """Build the enrichment plan from the canonical saved-profile shape."""
     report = profile_quality_report if isinstance(profile_quality_report, Mapping) else {}
     return build_profile_enrichment_plan(
         report,
         profile_data,
+        source_coverage_report=source_coverage_report,
         candidate_source="postgres",
     )
 

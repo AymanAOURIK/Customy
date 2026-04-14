@@ -137,6 +137,32 @@ class SourceCoverageApiPayloadTests(unittest.TestCase):
             {"report_version": "source_coverage_report.v1"},
         )
 
+    def test_onboarding_draft_payload_builds_source_aware_plan_when_report_is_provided(self):
+        source_coverage_report = build_source_coverage_report_from_parsed_text(
+            _source_resume_text(),
+            _draft_data(),
+            candidate_source="onboarding_draft",
+        )
+        payload_without_report = _onboarding_draft_payload(_draft_row())
+        payload_with_report = _onboarding_draft_payload(
+            _draft_row(),
+            source_coverage_report=source_coverage_report,
+        )
+        targets_without_report = {
+            target["target_key"]: target
+            for target in payload_without_report["profile_enrichment_plan"]["targets"]
+        }
+        targets_with_report = {
+            target["target_key"]: target
+            for target in payload_with_report["profile_enrichment_plan"]["targets"]
+        }
+
+        self.assertEqual(targets_without_report["scoring_keywords"]["classification"], "auto_derive")
+        self.assertEqual(
+            targets_with_report["scoring_keywords"]["classification"],
+            "recover_from_source_with_confirmation",
+        )
+
     @patch("app.routes_profile.get_resume_upload")
     @patch("app.routes_profile.get_onboarding_draft_db")
     def test_profile_report_uses_linked_onboarding_resume_context(
@@ -164,6 +190,32 @@ class SourceCoverageApiPayloadTests(unittest.TestCase):
         self.assertEqual(
             response_with_report["source_coverage_report"],
             {"report_version": "source_coverage_report.v1"},
+        )
+
+    def test_profile_response_builds_source_aware_plan_when_report_is_provided(self):
+        source_coverage_report = build_source_coverage_report_from_parsed_text(
+            _source_resume_text(),
+            _profile_data(),
+            candidate_source="postgres",
+        )
+        response_without_report = _profile_response(_profile_data())
+        response_with_report = _profile_response(
+            _profile_data(),
+            source_coverage_report=source_coverage_report,
+        )
+        targets_without_report = {
+            target["target_key"]: target
+            for target in response_without_report["profile_enrichment_plan"]["targets"]
+        }
+        targets_with_report = {
+            target["target_key"]: target
+            for target in response_with_report["profile_enrichment_plan"]["targets"]
+        }
+
+        self.assertEqual(targets_without_report["scoring_keywords"]["classification"], "auto_derive")
+        self.assertEqual(
+            targets_with_report["scoring_keywords"]["classification"],
+            "recover_from_source_with_confirmation",
         )
 
 
