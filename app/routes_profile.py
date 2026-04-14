@@ -30,10 +30,6 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     return payload
 
 
-def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    send_json(handler, status, payload)
-
-
 def _claim_str(payload: dict[str, Any], *path: str) -> str:
     current: Any = payload
     for key in path:
@@ -75,16 +71,16 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, auth_payload = require_auth(handler)
     except AuthError as exc:
-        _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     profile = get_profile(user_id)
     if profile is None:
         _log.info("profile.get empty_state user_id=%s", user_id)
-        _json_response(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
+        send_json(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
         return
     _log.info("profile.get found user_id=%s", user_id)
-    _json_response(handler, HTTPStatus.OK, {"exists": True, "profile": profile})
+    send_json(handler, HTTPStatus.OK, {"exists": True, "profile": profile})
 
 
 def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -92,33 +88,33 @@ def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     try:
         data = _sanitize_profile_payload(_read_json(handler))
     except ValueError as exc:
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     if not str(data.get("full_name") or "").strip():
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required"})
         return
 
     existing = get_profile(user_id)
     if existing:
-        _json_response(handler, HTTPStatus.CONFLICT, {"error": "Profile already exists. Use PUT to update."})
+        send_json(handler, HTTPStatus.CONFLICT, {"error": "Profile already exists. Use PUT to update."})
         return
 
     try:
         profile = create_profile(user_id, data)
     except Exception as exc:
         _log.exception("Failed to create profile for user %s", user_id)
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
     _log.info("profile.create created user_id=%s", user_id)
-    _json_response(handler, HTTPStatus.CREATED, profile)
+    send_json(handler, HTTPStatus.CREATED, profile)
 
 
 def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -126,18 +122,18 @@ def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     try:
         data = _sanitize_profile_payload(_read_json(handler))
     except ValueError as exc:
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     existing = get_profile(user_id)
     if not existing and not str(data.get("full_name") or "").strip():
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required to create a profile"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'full_name' is required to create a profile"})
         return
 
     try:
@@ -151,7 +147,7 @@ def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
             _log.info("profile.put created_missing_profile user_id=%s", user_id)
     except Exception as exc:
         _log.exception("Failed to update profile for user %s", user_id)
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
-    _json_response(handler, status, profile)
+    send_json(handler, status, profile)

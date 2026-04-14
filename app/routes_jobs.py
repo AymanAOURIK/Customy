@@ -44,18 +44,6 @@ _JOB_STATUS_RE = re.compile(r"^/api/jobs/(\d+)/status$")
 _JOB_NOTES_RE = re.compile(r"^/api/jobs/(\d+)/notes$")
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers (thin wrappers kept for call-site readability)
-# ---------------------------------------------------------------------------
-
-def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    return read_json_body(handler)
-
-
-def _json(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    send_json(handler, status, payload)
-
-
 def _fingerprint(source_url: str | None, company: str | None, title: str, description_text: str) -> str:
     """Stable per-user deduplication fingerprint.
 
@@ -150,7 +138,7 @@ def _handle_jobs_list(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     query = urlparse(handler.path).query
@@ -160,7 +148,7 @@ def _handle_jobs_list(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     offset = int((params.get("offset", ["0"])[0]) or 0)
 
     jobs = list_jobs(user_id, status=status, limit=limit, offset=offset)
-    _json(handler, HTTPStatus.OK, {
+    send_json(handler, HTTPStatus.OK, {
         "jobs": [_serialize_job(j) for j in jobs],
         "count": len(jobs),
         "limit": limit,
@@ -173,14 +161,14 @@ def _handle_job_get(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) -> 
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     job = get_job(user_id, job_id)
     if job is None:
-        _json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
+        send_json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
         return
-    _json(handler, HTTPStatus.OK, _serialize_job(job, full=True))
+    send_json(handler, HTTPStatus.OK, _serialize_job(job, full=True))
 
 
 def _handle_jobs_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -188,22 +176,22 @@ def _handle_jobs_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     try:
-        payload = _read_json(handler)
+        payload = read_json_body(handler)
     except ValueError as exc:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     title = str(payload.get("title") or "").strip()
     description_text = str(payload.get("description_text") or "").strip()
     if not title:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": "'title' is required"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'title' is required"})
         return
     if not description_text:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": "'description_text' is required"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'description_text' is required"})
         return
 
     company = str(payload.get("company") or "").strip() or None
@@ -229,15 +217,15 @@ def _handle_jobs_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         )
     except Exception:
         _log.exception("Failed to insert job for user %s", user_id)
-        _json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Failed to save job"})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Failed to save job"})
         return
 
     if job_id == -1:
-        _json(handler, HTTPStatus.CONFLICT, {"error": "A job with the same fingerprint already exists."})
+        send_json(handler, HTTPStatus.CONFLICT, {"error": "A job with the same fingerprint already exists."})
         return
 
     job = get_job(user_id, job_id)
-    _json(handler, HTTPStatus.CREATED, _serialize_job(job, full=True) if job else {"id": job_id})
+    send_json(handler, HTTPStatus.CREATED, _serialize_job(job, full=True) if job else {"id": job_id})
 
 
 def _handle_job_status(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) -> None:
@@ -245,33 +233,33 @@ def _handle_job_status(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) 
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     try:
-        payload = _read_json(handler)
+        payload = read_json_body(handler)
     except ValueError as exc:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     new_status = str(payload.get("status") or "").strip()
     if not new_status:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": "'status' is required"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'status' is required"})
         return
     if new_status not in VALID_JOB_STATUSES:
-        _json(handler, HTTPStatus.BAD_REQUEST, {
+        send_json(handler, HTTPStatus.BAD_REQUEST, {
             "error": f"Invalid status '{new_status}'. Must be one of: {', '.join(sorted(VALID_JOB_STATUSES))}"
         })
         return
 
     job = get_job(user_id, job_id)
     if job is None:
-        _json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
+        send_json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
         return
 
     update_job_status(user_id, job_id, new_status)
     updated = get_job(user_id, job_id)
-    _json(handler, HTTPStatus.OK, _serialize_job(updated) if updated else {"id": job_id, "status": new_status})
+    send_json(handler, HTTPStatus.OK, _serialize_job(updated) if updated else {"id": job_id, "status": new_status})
 
 
 def _handle_job_notes(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) -> None:
@@ -279,25 +267,25 @@ def _handle_job_notes(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) -
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     try:
-        payload = _read_json(handler)
+        payload = read_json_body(handler)
     except ValueError as exc:
-        _json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
 
     notes = str(payload.get("notes") or "").strip() or None
 
     job = get_job(user_id, job_id)
     if job is None:
-        _json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
+        send_json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
         return
 
     update_job_notes(user_id, job_id, notes)
     updated = get_job(user_id, job_id)
-    _json(handler, HTTPStatus.OK, _serialize_job(updated) if updated else {"id": job_id})
+    send_json(handler, HTTPStatus.OK, _serialize_job(updated) if updated else {"id": job_id})
 
 
 def _handle_job_delete(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) -> None:
@@ -305,13 +293,13 @@ def _handle_job_delete(handler: BaseHTTPRequestHandler, job_id: int, cfg: dict) 
     try:
         user_id, _ = require_auth(handler)
     except AuthError as exc:
-        _json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     job = get_job(user_id, job_id)
     if job is None:
-        _json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
+        send_json(handler, HTTPStatus.NOT_FOUND, {"error": f"Job {job_id} not found"})
         return
 
     delete_job(user_id, job_id)
-    _json(handler, HTTPStatus.OK, {"deleted": True, "id": job_id})
+    send_json(handler, HTTPStatus.OK, {"deleted": True, "id": job_id})

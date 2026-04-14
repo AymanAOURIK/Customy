@@ -20,10 +20,6 @@ from app.http_utils import send_json
 _log = logging.getLogger(__name__)
 
 
-def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: object) -> None:
-    send_json(handler, status, payload)
-
-
 def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     """GET /api/auth/me — verify JWT and return user identity.
 
@@ -36,13 +32,13 @@ def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
     try:
         user_id, payload = require_auth(handler)
     except AuthError as exc:
-        _json_response(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+        send_json(handler, HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
         return
 
     email = payload.get("email")
     if not is_allowed_user(user_id, email):
         _log.warning("Access denied for user %s (%s) — not on allowlist", user_id, email)
-        _json_response(
+        send_json(
             handler,
             HTTPStatus.FORBIDDEN,
             {
@@ -52,7 +48,7 @@ def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         )
         return
 
-    _json_response(
+    send_json(
         handler,
         HTTPStatus.OK,
         {

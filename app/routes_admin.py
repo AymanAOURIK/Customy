@@ -40,14 +40,6 @@ _IDEA_PATH_RE = re.compile(r"^/api/admin/ideas/(\d+)$")
 _USER_PATH_RE = re.compile(r"^/api/admin/users/([0-9a-f-]+)$")
 
 
-def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    return read_json_body(handler)
-
-
-def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: object) -> None:
-    send_json(handler, status, payload)
-
-
 def _require_admin(handler: BaseHTTPRequestHandler) -> str | None:
     """Return user_id if admin, or write 401/403 and return None."""
     try:
@@ -56,7 +48,7 @@ def _require_admin(handler: BaseHTTPRequestHandler) -> str | None:
     except AuthError as exc:
         msg = str(exc)
         status = HTTPStatus.FORBIDDEN if "Admin access" in msg else HTTPStatus.UNAUTHORIZED
-        _json_response(handler, status, {"error": msg})
+        send_json(handler, status, {"error": msg})
         return None
 
 
@@ -72,9 +64,9 @@ def handle_admin_users(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         users = list_users()
     except Exception as exc:
         _log.exception("admin users query failed")
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, {"users": users})
+    send_json(handler, HTTPStatus.OK, {"users": users})
 
 
 def handle_admin_user_detail(handler: BaseHTTPRequestHandler, target_user_id: str, cfg: dict) -> None:
@@ -85,9 +77,9 @@ def handle_admin_user_detail(handler: BaseHTTPRequestHandler, target_user_id: st
         detail = get_user_detail(target_user_id)
     except Exception as exc:
         _log.exception("admin user detail failed for %s", target_user_id)
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, detail)
+    send_json(handler, HTTPStatus.OK, detail)
 
 
 def handle_admin_stats(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -98,9 +90,9 @@ def handle_admin_stats(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         stats = get_platform_stats()
     except Exception as exc:
         _log.exception("admin stats query failed")
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, stats)
+    send_json(handler, HTTPStatus.OK, stats)
 
 
 def handle_admin_ideas_list(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -114,9 +106,9 @@ def handle_admin_ideas_list(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         ideas = list_ideas(status=status)
     except Exception as exc:
         _log.exception("admin ideas list failed")
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, {"ideas": ideas})
+    send_json(handler, HTTPStatus.OK, {"ideas": ideas})
 
 
 # ---------------------------------------------------------------------------
@@ -128,20 +120,20 @@ def handle_admin_idea_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None
     if _require_admin(handler) is None:
         return
     try:
-        data = _read_json(handler)
+        data = read_json_body(handler)
     except ValueError as exc:
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
     if not data.get("title", "").strip():
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": "'title' is required"})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": "'title' is required"})
         return
     try:
         idea = create_idea(data)
     except Exception as exc:
         _log.exception("admin idea create failed")
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.CREATED, idea)
+    send_json(handler, HTTPStatus.CREATED, idea)
 
 
 def handle_admin_idea_update(handler: BaseHTTPRequestHandler, idea_id: int, cfg: dict) -> None:
@@ -149,17 +141,17 @@ def handle_admin_idea_update(handler: BaseHTTPRequestHandler, idea_id: int, cfg:
     if _require_admin(handler) is None:
         return
     try:
-        data = _read_json(handler)
+        data = read_json_body(handler)
     except ValueError as exc:
-        _json_response(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        send_json(handler, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         return
     try:
         idea = update_idea(idea_id, data)
     except Exception as exc:
         _log.exception("admin idea update failed for id=%s", idea_id)
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, idea)
+    send_json(handler, HTTPStatus.OK, idea)
 
 
 def handle_admin_idea_delete(handler: BaseHTTPRequestHandler, idea_id: int, cfg: dict) -> None:
@@ -170,9 +162,9 @@ def handle_admin_idea_delete(handler: BaseHTTPRequestHandler, idea_id: int, cfg:
         delete_idea(idea_id)
     except Exception as exc:
         _log.exception("admin idea delete failed for id=%s", idea_id)
-        _json_response(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+        send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
-    _json_response(handler, HTTPStatus.OK, {"deleted": idea_id})
+    send_json(handler, HTTPStatus.OK, {"deleted": idea_id})
 
 
 # ---------------------------------------------------------------------------
