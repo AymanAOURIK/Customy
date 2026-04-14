@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import subprocess
@@ -8,6 +9,8 @@ from datetime import date
 from pathlib import Path
 
 from app.models import ApplicationPack
+
+_log = logging.getLogger(__name__)
 
 
 _METRIC_PATTERN = re.compile(
@@ -334,11 +337,15 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
 
 
 def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = None) -> str | None:
-    if shutil.which("pdflatex") is None:
+    pdflatex_bin = shutil.which("pdflatex")
+    if pdflatex_bin is None:
+        _log.error("compile_pdf: pdflatex not found in PATH — PDF will not be generated")
         return None
 
+    _log.info("compile_pdf: pdflatex found at %s", pdflatex_bin)
     tex_file = Path(tex_path).resolve()
     out_dir = Path(output_dir).resolve()
+    _log.info("compile_pdf: compiling %s → %s", tex_file, out_dir)
     try:
         result = subprocess.run(
             [
@@ -353,15 +360,26 @@ def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = No
             check=False,
         )
     except Exception as exc:
-        print(f"pdflatex execution failed: {exc}", file=sys.stderr)
+        _log.error("compile_pdf: pdflatex subprocess raised %s: %s", type(exc).__name__, exc)
         return None
 
     pdf_path = out_dir / f"{tex_file.stem}.pdf"
     if result.returncode != 0 or not pdf_path.exists():
-        combined = "\n".join(part for part in [result.stdout.strip(), result.stderr.strip()] if part)
-        if combined:
-            print(combined, file=sys.stderr)
+        # Extract the first error line from pdflatex output for a focused diagnosis
+        raw_output = "\n".join(part for part in [result.stdout.strip(), result.stderr.strip()] if part)
+        error_lines = [ln for ln in raw_output.splitlines() if ln.startswith("!") or "Error" in ln or "error" in ln]
+        excerpt = "\n".join(error_lines[:10]) if error_lines else raw_output[:500]
+        _log.error(
+            "compile_pdf: pdflatex failed returncode=%d pdf_exists=%s\nFirst error lines:\n%s",
+            result.returncode,
+            pdf_path.exists(),
+            excerpt,
+        )
+        if raw_output:
+            print(raw_output, file=sys.stderr)
         return None
+
+    _log.info("compile_pdf: pdflatex succeeded, pdf at %s", pdf_path)
 
     if output_filename:
         target_path = out_dir / output_filename
@@ -369,5 +387,6 @@ def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = No
             if target_path.exists():
                 target_path.unlink()
             pdf_path = pdf_path.replace(target_path)
+            _log.info("compile_pdf: renamed to %s", pdf_path)
 
     return str(pdf_path)

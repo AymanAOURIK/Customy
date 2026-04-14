@@ -1393,12 +1393,27 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     )
                     if pdf_path:
                         files["resume_pdf"] = pdf_path
+                        _log.info("generate: compile_pdf succeeded path=%s", pdf_path)
                     else:
-                        _log.warning("PDF compilation failed or pdflatex not found; resume.pdf will not be uploaded.")
+                        _log.warning(
+                            "generate: compile_pdf returned None — resume.pdf will not be uploaded "
+                            "(check compile_pdf ERROR lines above for pdflatex failure details)"
+                        )
 
                     if cfg["mode"] == "saas":
                         try:
+                            _log.info(
+                                "generate: calling upload_pack_files slug=%s output_dir=%s has_pdf=%s",
+                                slug,
+                                files["output_dir"],
+                                "resume_pdf" in files,
+                            )
                             cloud_paths = upload_pack_files(user_id, slug, files["output_dir"])
+                            _log.info(
+                                "generate: upload_pack_files returned keys=%s resume_pdf_url=%r",
+                                list(cloud_paths.keys()),
+                                cloud_paths.get("resume_pdf_url"),
+                            )
                             app_id = pg_insert_application(
                                 user_id=user_id,
                                 company=company,

@@ -6,9 +6,12 @@ Persistent storage paths are saved in Postgres; signed URLs are minted on read.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 _supabase_client: Any = None
 
@@ -121,10 +124,18 @@ def _upload_first_matching(
     key: str,
     stored: dict[str, str],
 ) -> None:
-    for local in sorted(base.glob(pattern)):
-        if local.is_file():
-            stored[key] = upload_file(user_id, slug, local.name, str(local))
-            return
+    matches = sorted(f for f in base.glob(pattern) if f.is_file())
+    if not matches:
+        _log.warning(
+            "upload_pack_files: no file matched pattern=%r in %s — %s will not be uploaded",
+            pattern,
+            base,
+            key,
+        )
+        return
+    local = matches[0]
+    _log.info("upload_pack_files: uploading %s as %s", local.name, key)
+    stored[key] = upload_file(user_id, slug, local.name, str(local))
 
 
 def upload_bytes_at_path(
