@@ -16,8 +16,10 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 from app.auth import AuthError, require_auth
+from app.candidate_context import build_candidate_context_from_profile_data
 from app.http_utils import read_json_body, send_json
 from app.profile_db import create_profile, get_profile, update_profile, upsert_profile
+from app.profile_quality import build_profile_quality_report
 from app.text_utils import sanitize_data_strings
 
 _log = logging.getLogger(__name__)
@@ -37,6 +39,20 @@ def _claim_str(payload: dict[str, Any], *path: str) -> str:
             return ""
         current = current.get(key)
     return str(current or "").strip()
+
+
+def _profile_quality_report(profile_data: dict[str, Any]) -> dict[str, object]:
+    candidate_context = build_candidate_context_from_profile_data(
+        profile_data,
+        candidate_source="postgres",
+    )
+    return build_profile_quality_report(candidate_context)
+
+
+def _profile_response(profile: dict[str, Any]) -> dict[str, Any]:
+    body = dict(profile or {})
+    body["profile_quality_report"] = _profile_quality_report(body)
+    return body
 
 
 def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[str, Any]:
@@ -59,7 +75,11 @@ def _empty_profile_payload(user_id: str, auth_payload: dict[str, Any]) -> dict[s
         "spoken_languages": [],
         "scoring_keywords": [],
     }
-    return {"exists": False, "profile": profile}
+    return {
+        "exists": False,
+        "profile": profile,
+        "profile_quality_report": _profile_quality_report(profile),
+    }
 
 
 def _sanitize_profile_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -80,7 +100,15 @@ def handle_profile_get(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, HTTPStatus.OK, _empty_profile_payload(user_id, auth_payload))
         return
     _log.info("profile.get found user_id=%s", user_id)
-    send_json(handler, HTTPStatus.OK, {"exists": True, "profile": profile})
+    send_json(
+        handler,
+        HTTPStatus.OK,
+        {
+            "exists": True,
+            "profile": profile,
+            "profile_quality_report": _profile_quality_report(profile),
+        },
+    )
 
 
 def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -114,7 +142,7 @@ def handle_profile_create(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
 
     _log.info("profile.create created user_id=%s", user_id)
-    send_json(handler, HTTPStatus.CREATED, profile)
+    send_json(handler, HTTPStatus.CREATED, _profile_response(profile))
 
 
 def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
@@ -150,4 +178,4 @@ def handle_profile_update(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
         return
 
-    send_json(handler, status, profile)
+    send_json(handler, status, _profile_response(profile))

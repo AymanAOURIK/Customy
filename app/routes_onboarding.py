@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from app.auth import AuthError, require_auth
+from app.candidate_context import build_candidate_context_from_profile_data
 from app.db_postgres import record_api_usage as pg_record_api_usage
 from app.http_utils import send_json
 from app.onboarding import (
@@ -21,12 +22,21 @@ from app.onboarding_db import (
     update_resume_upload_parsed,
     upsert_onboarding_draft,
 )
+from app.profile_quality import build_profile_quality_report
 from app.resume_parser import extract_text as extract_resume_text
 from app.storage_cloud import upload_bytes_at_path
 
 _log = logging.getLogger("app.server")
 
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _draft_profile_quality_report(draft_data: dict | None) -> dict[str, object]:
+    candidate_context = build_candidate_context_from_profile_data(
+        draft_data or {},
+        candidate_source="onboarding_draft",
+    )
+    return build_profile_quality_report(candidate_context)
 
 
 def dispatch_onboarding_get(handler: BaseHTTPRequestHandler, path: str, cfg: dict) -> bool:
@@ -85,7 +95,9 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
             "status": "empty",
             "draft_data": {},
             "gap_analysis": {},
+            "profile_quality_report": _draft_profile_quality_report({}),
         }
+    draft_data = draft.get("draft_data") or {}
     return {
         "exists": True,
         "id": str(draft.get("id") or ""),
@@ -96,8 +108,9 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
             else None
         ),
         "updated_at": str(draft.get("updated_at") or ""),
-        "draft_data": draft.get("draft_data") or {},
+        "draft_data": draft_data,
         "gap_analysis": draft.get("gap_analysis") or {},
+        "profile_quality_report": _draft_profile_quality_report(draft_data),
     }
 
 
@@ -385,6 +398,7 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         return
     try:
         draft_data, gap_analysis, usage_summary = onboarding_extract_draft(parsed_text, cfg)
+        profile_quality_report = _draft_profile_quality_report(draft_data)
         _log.info(
             "resume_upload.draft_extracted user_id=%s upload_id=%s experiences=%d skill_count=%s",
             user_id,
@@ -454,6 +468,7 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, status, payload)
         return
     draft_payload = _onboarding_draft_payload(draft_row)
+    draft_payload["profile_quality_report"] = profile_quality_report
     send_json(
         handler,
         HTTPStatus.OK,
@@ -473,5 +488,6 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
             "draft": draft_payload,
             "draft_data": draft_payload.get("draft_data", {}),
             "gap_analysis": draft_payload.get("gap_analysis", {}),
+            "profile_quality_report": profile_quality_report,
         },
     )
