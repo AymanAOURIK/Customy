@@ -10,24 +10,18 @@ These handlers are registered in server.py during the V3 integration pass.
 
 from __future__ import annotations
 
-import json
 import logging
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
-from typing import Any
 
 from app.auth import AuthError, is_admin, is_allowed_user, require_auth
+from app.http_utils import send_json
 
 _log = logging.getLogger(__name__)
 
 
-def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: object) -> None:
+    send_json(handler, status, payload)
 
 
 def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:

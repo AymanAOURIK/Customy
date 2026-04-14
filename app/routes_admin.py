@@ -16,12 +16,10 @@ These handlers are registered in server.py during the V3 integration pass.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
-from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from app.admin import (
@@ -34,6 +32,7 @@ from app.admin import (
     update_idea,
 )
 from app.auth import AuthError, require_admin
+from app.http_utils import read_json_body, send_json
 
 _log = logging.getLogger(__name__)
 
@@ -42,21 +41,11 @@ _USER_PATH_RE = re.compile(r"^/api/admin/users/([0-9a-f-]+)$")
 
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    length = int(handler.headers.get("Content-Length", "0"))
-    raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
-    try:
-        return json.loads(raw or "{}")
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON: {exc}") from exc
+    return read_json_body(handler)
 
 
-def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: object) -> None:
+    send_json(handler, status, payload)
 
 
 def _require_admin(handler: BaseHTTPRequestHandler) -> str | None:

@@ -16,34 +16,25 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from app.analyzer import analyze_jd, build_updated_resume_keywords
 from app.db import (
-    create_prep_session,
-    delete_answer,
-    delete_prep_session,
     get_analytics,
-    get_answer_bank,
-    get_answer_by_key,
     get_application,
     get_application_events,
     get_apply_queue,
     get_daily_stats,
     get_funnel_stats,
-    get_prep_session,
     get_quick_stats,
     get_tracker_applications,
     insert_application,
     list_applications,
-    list_prep_sessions,
     record_api_usage,
     refresh_daily_stats,
     set_duplicate_flag,
     update_application_notes,
-    update_prep_session,
     update_status,
-    upsert_answer,
 )
 from app.generator import PackGenerationError, generate_pack
+from app.http_utils import read_json_body
 from app.latex import compile_pdf, render_tex
-from app.playfill import build_fill_plan, run_playwright_fill
 from app.profile import build_candidate_context
 from app.storage import make_slug, set_applications_dir, write_pack
 from app.storage_cloud import get_signed_url_for_path, upload_bytes_at_path, upload_pack_files
@@ -86,6 +77,7 @@ from app.routes_jobs import (
     dispatch_jobs_post,
 )
 from app.routes_profile import handle_profile_create, handle_profile_get, handle_profile_update
+from app.routes_local import dispatch_local_get, dispatch_local_patch, dispatch_local_post
 from app.routes_admin import (
     dispatch_admin_delete,
     dispatch_admin_get,
@@ -97,83 +89,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = PROJECT_ROOT / "app" / "templates"
 STATIC_DIR = PROJECT_ROOT / "app" / "static"
 ALLOWED_OUTPUTS = {"resume", "cover_letter", "linkedin_msg", "email_draft"}
-
-# ── Interview prep question templates ─────────────────────────────────────
-
-_PREP_BEHAVIORAL: list[tuple[str, str]] = [
-    ("Tell me about a time you led a technical project end-to-end.", "behavioral"),
-    ("Describe a situation where you had to make a decision with incomplete information.", "behavioral"),
-    ("Give an example of a time you persuaded stakeholders of a technical direction.", "behavioral"),
-    ("Tell me about a time you failed and what you learned from it.", "behavioral"),
-    ("Describe a time you worked under tight deadlines. How did you manage priorities?", "behavioral"),
-    ("Tell me about a time you mentored or helped a colleague grow professionally.", "behavioral"),
-]
-
-_PREP_TECHNICAL: dict[str, list[str]] = {
-    "ai_platform": [
-        "How do you design an ML pipeline for production reliability?",
-        "What is your approach to model monitoring and drift detection?",
-        "Walk me through how you would set up an MLOps stack from scratch.",
-        "How do you handle data quality issues in a production ML pipeline?",
-    ],
-    "agentic": [
-        "Explain how you would design an agentic system with tool use and memory.",
-        "What are the key failure modes of LLM-based autonomous agents?",
-        "How do you evaluate a RAG pipeline's accuracy and reliability in production?",
-        "How would you approach prompt engineering for a complex multi-step agent?",
-    ],
-    "ai_pm": [
-        "How do you define success metrics for an AI-powered product feature?",
-        "Describe how you would prioritize ML model improvements against other features.",
-        "How do you communicate technical AI limitations to non-technical stakeholders?",
-        "Walk me through your process for gathering requirements for an AI feature.",
-    ],
-    "ai_architect": [
-        "How do you evaluate different vector database solutions for a RAG system?",
-        "What are your considerations when designing a multi-model AI architecture?",
-        "How do you approach scalability in a real-time ML inference system?",
-        "Describe your approach to AI system observability and debugging.",
-    ],
-    "ai_forward_deployed": [
-        "How do you approach understanding a new client's technical environment?",
-        "Describe how you would demo an AI product to a skeptical technical audience.",
-        "How do you handle customer escalations about AI output quality?",
-        "How do you translate customer feedback into actionable product requirements?",
-    ],
-    "ai_transformation": [
-        "How have you driven AI adoption across teams that were initially resistant?",
-        "Describe your approach to building an internal AI capability roadmap.",
-        "How do you measure the ROI of an AI transformation initiative?",
-        "What change management techniques do you apply when rolling out AI tools?",
-    ],
-    "general": [
-        "Walk me through your experience with data pipelines and ETL processes.",
-        "How do you approach system design for a data-intensive application?",
-        "Describe your debugging process when a production system is slow or failing.",
-        "How do you stay current with rapidly evolving technologies in your field?",
-    ],
-}
-
-_PREP_SITUATIONAL: list[str] = [
-    "If you joined this team tomorrow, what would your first 30 days look like?",
-    "How would you handle a situation where a key model in production starts underperforming?",
-    "Imagine you have been given a poorly documented legacy codebase. How do you approach it?",
-]
-
-
-def _generate_prep_questions(archetype: str | None) -> list[dict]:
-    """Returns a starter question set based on role archetype. No LLM required."""
-    import uuid
-    arch = str(archetype or "general").lower()
-    tech = _PREP_TECHNICAL.get(arch, _PREP_TECHNICAL["general"])
-    questions: list[dict] = []
-    for text, cat in _PREP_BEHAVIORAL[:4]:
-        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": cat, "answer": "", "confidence": ""})
-    for text in tech[:4]:
-        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": "technical", "answer": "", "confidence": ""})
-    for text in _PREP_SITUATIONAL[:2]:
-        questions.append({"id": uuid.uuid4().hex[:8], "text": text, "category": "situational", "answer": "", "confidence": ""})
-    return questions
 
 _log = logging.getLogger(__name__)
 
@@ -481,15 +396,6 @@ def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
     }
 
 
-def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    content_length = int(handler.headers.get("Content-Length", "0"))
-    raw = handler.rfile.read(content_length).decode("utf-8") if content_length else "{}"
-    try:
-        return json.loads(raw or "{}")
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON body: {exc}") from exc
-
-
 def _normalize_bool(value: object, field_name: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -735,29 +641,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 if _ev_match:
                     self._handle_application_events(int(_ev_match.group(1)))
                     return
-                if parsed.path == "/api/answer-bank":
-                    if cfg["mode"] == "saas":
-                        self._saas_local_only("Answer Bank")
-                        return
-                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
-                    return
-                if parsed.path == "/api/interview-prep":
-                    if cfg["mode"] == "saas":
-                        self._saas_local_only("Interview Prep")
-                        return
-                    sessions = list_prep_sessions(db_path)
-                    self._json(HTTPStatus.OK, {"sessions": sessions})
-                    return
-                _prep_get_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
-                if _prep_get_match:
-                    if cfg["mode"] == "saas":
-                        self._saas_local_only("Interview Prep")
-                        return
-                    session = get_prep_session(db_path, int(_prep_get_match.group(1)))
-                    if not session:
-                        self._json(HTTPStatus.NOT_FOUND, {"error": "Prep session not found."})
-                        return
-                    self._json(HTTPStatus.OK, {"session": session})
+                if dispatch_local_get(self, parsed.path, cfg):
                     return
                 if cfg["mode"] == "saas":
                     if parsed.path == "/api/auth/me":
@@ -821,190 +705,8 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 except Exception as exc:
                     self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
-            if parsed.path == "/api/answer-bank":
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Answer Bank")
-                    return
-                try:
-                    payload = _read_json(self)
-                    question_key = str(payload.get("question_key") or "").strip()
-                    answer_text = str(payload.get("answer_text") or "").strip()
-                    if not question_key or not answer_text:
-                        raise ValueError("Fields 'question_key' and 'answer_text' are required.")
-                    upsert_answer(
-                        db_path,
-                        question_key=question_key,
-                        question_text=str(payload.get("question_text") or question_key).strip(),
-                        answer_text=answer_text,
-                        category=str(payload.get("category") or "").strip(),
-                        language=str(payload.get("language") or "en").strip(),
-                        source="manual",
-                    )
-                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
-                except ValueError as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            if dispatch_local_post(self, parsed.path, cfg):
                 return
-
-            if parsed.path == "/api/answer-question":
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Answer Bank")
-                    return
-                try:
-                    payload = _read_json(self)
-                    question = str(payload.get("question") or "").strip().lower()
-                    if not question:
-                        raise ValueError("Field 'question' is required.")
-                    answers = get_answer_bank(db_path)
-                    _CATEGORY_KEYWORDS: dict[str, list[str]] = {
-                        "work_authorization": ["authorized", "work authorization", "visa", "sponsorship", "eligible to work", "right to work", "work permit"],
-                        "salary": ["salary", "compensation", "pay", "rate", "expectations", "package", "remuneration"],
-                        "availability": ["start date", "available", "notice period", "when can you start", "earliest start"],
-                        "relocation": ["relocate", "relocation", "move to", "willing to move"],
-                        "linkedin": ["linkedin", "linkedin url", "professional profile"],
-                        "github": ["github", "portfolio", "code samples", "github url"],
-                    }
-                    matched_category = next(
-                        (cat for cat, keywords in _CATEGORY_KEYWORDS.items() if any(kw in question for kw in keywords)),
-                        None,
-                    )
-                    matched_answer = next(
-                        (a for a in answers if a.get("category") == matched_category),
-                        None,
-                    ) if matched_category else None
-                    self._json(HTTPStatus.OK, {
-                        "matched": matched_answer is not None,
-                        "category": matched_category,
-                        "answer": matched_answer,
-                        "hint": None if matched_answer else (
-                            f"No answer saved for category '{matched_category}'. Add it in the Answer Bank."
-                            if matched_category else "Question did not match any known category."
-                        ),
-                    })
-                except ValueError as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
-            if parsed.path.startswith("/api/answer-bank/") and parsed.path.endswith("/delete"):
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Answer Bank")
-                    return
-                try:
-                    key = unquote(parsed.path.removeprefix("/api/answer-bank/").removesuffix("/delete"))
-                    delete_answer(db_path, key)
-                    self._json(HTTPStatus.OK, {"answers": get_answer_bank(db_path)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
-            if parsed.path == "/api/apply-assist":
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Apply Assist")
-                    return
-                try:
-                    payload = _read_json(self)
-                    app_id = payload.get("app_id")
-                    market = str(payload.get("market") or "").strip().lower() or None
-                    use_playwright = bool(payload.get("use_playwright", False))
-
-                    # Resolve ATS vendor and cover letter from the stored application
-                    ats_vendor: str | None = None
-                    cover_letter_text: str | None = None
-                    application_url_for_pw: str | None = None
-                    if app_id is not None:
-                        row = get_application(db_path, int(app_id))
-                        if not row:
-                            raise ValueError(f"Application {app_id} not found.")
-                        ats_vendor = row.get("role_archetype")  # archetype stored, vendor comes from analysis
-                        # Try to read cover letter text from disk
-                        outputs_path = row.get("outputs_path") or ""
-                        if outputs_path:
-                            cl_matches = sorted(Path(outputs_path).glob("*Cover_letter.txt"))
-                            if cl_matches:
-                                try:
-                                    cover_letter_text = cl_matches[0].read_text(encoding="utf-8")
-                                except Exception:
-                                    pass
-                        application_url_for_pw = row.get("job_application_url")
-                        # Re-derive ats_vendor from application URL if stored
-                        if application_url_for_pw:
-                            from app.analyzer import _detect_ats_vendor  # type: ignore[attr-defined]
-                            ats_vendor = _detect_ats_vendor(application_url_for_pw)
-
-                    fill_plan = build_fill_plan(
-                        db_path=db_path,
-                        ats_vendor=ats_vendor,
-                        market=market,
-                        cover_letter_text=cover_letter_text,
-                    )
-
-                    playwright_result: dict | None = None
-                    if use_playwright and application_url_for_pw:
-                        playwright_result = run_playwright_fill(application_url_for_pw, fill_plan)
-
-                    self._json(HTTPStatus.OK, {
-                        "fill_plan": fill_plan,
-                        "playwright": playwright_result,
-                    })
-                except ValueError as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
-            if parsed.path == "/api/interview-prep":
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Interview Prep")
-                    return
-                try:
-                    payload = _read_json(self)
-                    company = str(payload.get("company") or "").strip()
-                    role = str(payload.get("role") or "").strip()
-                    raw_app_id = payload.get("application_id")
-                    application_id: int | None = int(raw_app_id) if raw_app_id is not None else None
-                    archetype: str | None = None
-                    if application_id is not None:
-                        app_row = get_application(db_path, application_id)
-                        if not app_row:
-                            raise ValueError(f"Application {application_id} not found.")
-                        if not company:
-                            company = str(app_row.get("company") or "")
-                        if not role:
-                            role = str(app_row.get("role") or "")
-                        archetype = app_row.get("role_archetype")
-                    if not role:
-                        raise ValueError("Field 'role' is required.")
-                    questions = _generate_prep_questions(archetype)
-                    session_id = create_prep_session(
-                        db_path,
-                        application_id=application_id,
-                        company=company,
-                        role=role,
-                        questions=questions,
-                    )
-                    session = get_prep_session(db_path, session_id)
-                    self._json(HTTPStatus.CREATED, {"session": session})
-                except ValueError as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
-            _prep_delete_match = re.fullmatch(r"/api/interview-prep/(\d+)/delete", parsed.path)
-            if _prep_delete_match:
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Interview Prep")
-                    return
-                try:
-                    delete_prep_session(db_path, int(_prep_delete_match.group(1)))
-                    self._json(HTTPStatus.OK, {"ok": True})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
             if cfg["mode"] == "saas":
                 if parsed.path == "/api/resume/upload":
                     try:
@@ -1255,7 +957,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
             try:
-                payload = _read_json(self)
+                payload = read_json_body(self)
                 jd_text = str(payload.get("jd", "")).strip()
                 if not jd_text:
                     raise ValueError("Field 'jd' is required.")
@@ -1540,33 +1242,12 @@ def run_server(host: str, port: int, cfg: dict) -> None:
 
         def do_PATCH(self) -> None:
             parsed = urlparse(self.path)
-            _prep_patch_match = re.fullmatch(r"/api/interview-prep/(\d+)", parsed.path)
-            if _prep_patch_match:
-                if cfg["mode"] == "saas":
-                    self._saas_local_only("Interview Prep")
-                    return
-                try:
-                    session_id = int(_prep_patch_match.group(1))
-                    payload = _read_json(self)
-                    questions = payload.get("questions")
-                    notes = payload.get("notes")
-                    update_prep_session(
-                        db_path,
-                        session_id,
-                        questions=questions if isinstance(questions, list) else None,
-                        notes=str(notes) if notes is not None else None,
-                    )
-                    session = get_prep_session(db_path, session_id)
-                    self._json(HTTPStatus.OK, {"session": session})
-                except ValueError as exc:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                except Exception as exc:
-                    self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            if dispatch_local_patch(self, parsed.path, cfg):
                 return
             duplicate_match = re.fullmatch(r"/api/applications/(\d+)/duplicate", parsed.path)
             if duplicate_match:
                 try:
-                    payload = _read_json(self)
+                    payload = read_json_body(self)
                     app_id = int(duplicate_match.group(1))
                     is_duplicate = _normalize_bool(payload.get("is_duplicate"), "is_duplicate")
                     detail = str(payload.get("detail", "")).strip()
@@ -1593,7 +1274,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             _notes_match = re.fullmatch(r"/api/applications/(\d+)/notes", parsed.path)
             if _notes_match:
                 try:
-                    payload = _read_json(self)
+                    payload = read_json_body(self)
                     app_id = int(_notes_match.group(1))
                     notes = str(payload.get("notes", "")).strip()
                     if cfg["mode"] == "saas":
@@ -1617,7 +1298,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
             try:
-                payload = _read_json(self)
+                payload = read_json_body(self)
                 app_id = int(match.group(1))
                 new_status = str(payload.get("new_status", "")).strip()
                 detail = str(payload.get("detail", "")).strip()

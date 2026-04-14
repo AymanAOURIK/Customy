@@ -15,7 +15,6 @@ User isolation is enforced: every DB call passes user_id from the JWT.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
 from http import HTTPStatus
@@ -32,6 +31,7 @@ from app.db_postgres import (
     update_job_notes,
     update_job_status,
 )
+from app.http_utils import read_json_body, send_json
 
 _log = logging.getLogger(__name__)
 
@@ -45,25 +45,15 @@ _JOB_NOTES_RE = re.compile(r"^/api/jobs/(\d+)/notes$")
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal helpers (thin wrappers kept for call-site readability)
 # ---------------------------------------------------------------------------
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    length = int(handler.headers.get("Content-Length", "0"))
-    raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
-    try:
-        return json.loads(raw or "{}")
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON: {exc}") from exc
+    return read_json_body(handler)
 
 
 def _json(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+    send_json(handler, status, payload)
 
 
 def _fingerprint(source_url: str | None, company: str | None, title: str, description_text: str) -> str:

@@ -10,13 +10,13 @@ These handlers are registered in server.py during the V3 integration pass.
 
 from __future__ import annotations
 
-import json
 import logging
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 from app.auth import AuthError, require_auth
+from app.http_utils import read_json_body, send_json
 from app.profile_db import create_profile, get_profile, update_profile, upsert_profile
 from app.text_utils import sanitize_data_strings
 
@@ -24,24 +24,14 @@ _log = logging.getLogger(__name__)
 
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
-    length = int(handler.headers.get("Content-Length", "0"))
-    raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
-    try:
-        payload = json.loads(raw or "{}")
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON: {exc}") from exc
+    payload = read_json_body(handler)
     if not isinstance(payload, dict):
         raise ValueError("JSON body must be an object")
     return payload
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) -> None:
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+    send_json(handler, status, payload)
 
 
 def _claim_str(payload: dict[str, Any], *path: str) -> str:
