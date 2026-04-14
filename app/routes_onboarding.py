@@ -9,8 +9,12 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from app.auth import AuthError, require_auth
+from app.db_postgres import record_api_usage as pg_record_api_usage
 from app.http_utils import send_json
-from app.onboarding import extract_draft as onboarding_extract_draft
+from app.onboarding import (
+    OnboardingExtractionError,
+    extract_draft as onboarding_extract_draft,
+)
 from app.onboarding_db import (
     get_onboarding_draft as get_onboarding_draft_db,
     insert_resume_upload,
@@ -95,6 +99,32 @@ def _onboarding_draft_payload(draft: dict | None) -> dict[str, object]:
         "draft_data": draft.get("draft_data") or {},
         "gap_analysis": draft.get("gap_analysis") or {},
     }
+
+
+def _record_onboarding_usage(
+    user_id: str,
+    usage_summary: dict[str, object] | None,
+    *,
+    request_status: str,
+    error_message: str = "",
+) -> None:
+    attempts = list((usage_summary or {}).get("attempts") or [])
+    if not attempts:
+        return
+    try:
+        pg_record_api_usage(
+            user_id,
+            attempts,
+            application_id=None,
+            request_status=request_status,
+            error_message=error_message,
+        )
+    except Exception:
+        _log.exception(
+            "resume_upload.usage_persist_failed user_id=%s request_status=%s",
+            user_id,
+            request_status,
+        )
 
 
 def _parse_upload_file(handler: BaseHTTPRequestHandler) -> tuple[str, bytes, str | None]:
@@ -354,7 +384,7 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         send_json(handler, status, payload)
         return
     try:
-        draft_data, gap_analysis = onboarding_extract_draft(parsed_text, cfg)
+        draft_data, gap_analysis, usage_summary = onboarding_extract_draft(parsed_text, cfg)
         _log.info(
             "resume_upload.draft_extracted user_id=%s upload_id=%s experiences=%d skill_count=%s",
             user_id,
@@ -362,6 +392,31 @@ def handle_resume_upload(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
             len(draft_data.get("experiences") or []),
             gap_analysis.get("skill_count"),
         )
+        _record_onboarding_usage(
+            user_id,
+            usage_summary,
+            request_status="succeeded",
+        )
+    except OnboardingExtractionError as exc:
+        _record_onboarding_usage(
+            user_id,
+            exc.usage_summary,
+            request_status="failed",
+            error_message=str(exc),
+        )
+        _log.exception(
+            "resume_upload.draft_extract_failed user_id=%s upload_id=%s",
+            user_id,
+            upload_id,
+        )
+        status, payload = _resume_upload_error_payload(
+            "extract_failed",
+            str(exc),
+            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            details={"upload_id": upload_id},
+        )
+        send_json(handler, status, payload)
+        return
     except ValueError as exc:
         _log.exception(
             "resume_upload.draft_extract_failed user_id=%s upload_id=%s",

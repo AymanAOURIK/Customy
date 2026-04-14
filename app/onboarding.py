@@ -15,6 +15,7 @@ import logging
 import os
 from typing import Any
 
+from app.openai_usage import OpenAIUsageRecord, summarize_usage, usage_from_response
 from app.text_utils import sanitize_text
 
 _log = logging.getLogger(__name__)
@@ -110,17 +111,24 @@ Output exactly this JSON structure (no extra top-level keys):
 """
 
 
+class OnboardingExtractionError(ValueError):
+    def __init__(self, message: str, usage_summary: dict | None = None) -> None:
+        super().__init__(message)
+        self.usage_summary = usage_summary or summarize_usage([])
+
+
 def extract_draft(
     parsed_text: str,
     config: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Extract a structured profile draft and gap analysis from raw resume text.
 
     Uses the cheaper analysis_model (gpt-4o-mini by default) at temperature 0
     with JSON mode enforced.
 
     Returns:
-        (draft_data, gap_analysis) — both dicts ready for storage.
+        (draft_data, gap_analysis, usage_summary) — dicts ready for storage
+        and usage tracking.
 
     Raises:
         ValueError if the API call fails or returns unparseable output.
@@ -141,6 +149,7 @@ def extract_draft(
         raise ValueError("OPENAI_API_KEY is not set")
 
     client = OpenAI(api_key=api_key)
+    usage_records: list[OpenAIUsageRecord] = []
 
     user_message = (
         f"Extract structured data from the following resume text.\n\n"
@@ -159,14 +168,32 @@ def extract_draft(
             ],
         )
     except Exception as exc:
-        raise ValueError(f"LLM extraction call failed: {exc}") from exc
+        raise OnboardingExtractionError(f"LLM extraction call failed: {exc}") from exc
 
-    raw = (response.choices[0].message.content or "").strip()
+    usage_records.append(
+        usage_from_response(
+            response,
+            request_kind="onboarding_extract_draft",
+            attempt_number=1,
+            fallback_model=model,
+            config=config,
+        )
+    )
+    usage_summary = summarize_usage(usage_records)
+
+    try:
+        raw = (response.choices[0].message.content or "").strip()
+    except Exception as exc:
+        raise OnboardingExtractionError(
+            f"LLM extraction response was missing content: {exc}",
+            usage_summary=usage_summary,
+        ) from exc
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"LLM returned invalid JSON: {exc}\n\nRaw (first 500 chars): {raw[:500]}"
+        raise OnboardingExtractionError(
+            f"LLM returned invalid JSON: {exc}\n\nRaw (first 500 chars): {raw[:500]}",
+            usage_summary=usage_summary,
         ) from exc
 
     draft_data: dict[str, Any] = result.get("draft_data") or {}
@@ -184,4 +211,4 @@ def extract_draft(
         gap_analysis.get("thin_skills"),
     )
 
-    return draft_data, gap_analysis
+    return draft_data, gap_analysis, usage_summary
