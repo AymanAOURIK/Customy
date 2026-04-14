@@ -1,10 +1,12 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Install pdflatex and required TeX packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    texlive-base \
+    texlive-latex-base \
     texlive-latex-extra \
     texlive-fonts-recommended \
+    texlive-latex-recommended \
+    texlive-font-utils \
     texlive-lang-french \
     && rm -rf /var/lib/apt/lists/*
 

@@ -389,4 +389,5 @@ def compile_pdf(tex_path: str, output_dir: str, output_filename: str | None = No
             pdf_path = pdf_path.replace(target_path)
             _log.info("compile_pdf: renamed to %s", pdf_path)
 
+    _log.info("compile_pdf: PDF generated at %s", pdf_path)
     return str(pdf_path)
