@@ -6,7 +6,6 @@ import mimetypes
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import uuid
 from http import HTTPStatus
@@ -14,7 +13,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from app.analyzer import analyze_jd, build_updated_resume_keywords
 from app.db import (
     get_analytics,
     get_application,
@@ -24,20 +22,17 @@ from app.db import (
     get_funnel_stats,
     get_quick_stats,
     get_tracker_applications,
-    insert_application,
     list_applications,
-    record_api_usage,
     refresh_daily_stats,
     set_duplicate_flag,
     update_application_notes,
     update_status,
 )
-from app.generator import PackGenerationError, generate_pack
+from app.generation_flow import GenerationResult, ScoreGateBlocked, run_generation
 from app.http_utils import read_json_body
-from app.latex import compile_pdf, render_tex
 from app.profile import build_candidate_context
-from app.storage import make_slug, set_applications_dir, write_pack
-from app.storage_cloud import get_signed_url_for_path, upload_bytes_at_path, upload_pack_files
+from app.storage import set_applications_dir
+from app.storage_cloud import get_signed_url_for_path, upload_bytes_at_path
 from app.resume_parser import extract_text as extract_resume_text
 from app.onboarding import extract_draft as onboarding_extract_draft
 from app.onboarding_db import (
@@ -46,12 +41,9 @@ from app.onboarding_db import (
     update_resume_upload_parsed,
     upsert_onboarding_draft,
 )
-from app.targeting import candidate_keywords_from_profile
-import psycopg2.errors as _pg_errors
 from app.auth import AuthError, require_auth
 from app.profile_db import get_profile, profile_to_candidate_context
 from app.db_postgres import (
-    application_slug_exists as pg_application_slug_exists,
     get_analytics as pg_get_analytics,
     get_application as pg_get_application,
     get_application_events as pg_get_application_events,
@@ -60,10 +52,7 @@ from app.db_postgres import (
     get_funnel_stats as pg_get_funnel_stats,
     get_quick_stats as pg_get_quick_stats,
     get_tracker_applications as pg_get_tracker_applications,
-    insert_application as pg_insert_application,
-    link_job_to_application,
     list_applications as pg_list_applications,
-    record_api_usage as pg_record_api_usage,
     refresh_daily_stats as pg_refresh_daily_stats,
     set_duplicate_flag as pg_set_duplicate_flag,
     update_application_notes as pg_update_application_notes,
@@ -108,38 +97,6 @@ def _normalize_application_url(value: object) -> str | None:
         raise ValueError("Field 'application_url' must be a valid http/https URL.")
     return parsed.geturl()
 
-
-def _clean_company_name(value: object) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip()).strip(" .,:;|-")
-
-
-def _company_quality(value: object) -> int:
-    company = _clean_company_name(value)
-    if not company:
-        return 0
-    lowered = company.lower()
-    if lowered in {"unknown", "unknown company", "company", "our company", "our team", "team"}:
-        return 0
-    score = 1
-    if " " in company or "&" in company or "." in company:
-        score += 1
-    if any(char.isupper() for char in company[1:]):
-        score += 1
-    if len(company) >= 5:
-        score += 1
-    return score
-
-
-def _pick_company_name(*candidates: object) -> str | None:
-    best = ""
-    best_score = 0
-    for candidate in candidates:
-        cleaned = _clean_company_name(candidate)
-        score = _company_quality(cleaned)
-        if score > best_score:
-            best = cleaned
-            best_score = score
-    return best or None
 
 
 def _open_folder_in_file_manager(path: str, applications_dir: Path) -> None:
@@ -419,21 +376,6 @@ def _normalize_outputs(raw_outputs: object) -> list[str]:
             outputs.append(value)
     return outputs
 
-
-def _candidate_keywords(candidate_context: dict) -> list[str]:
-    keywords = candidate_keywords_from_profile(candidate_context)
-    location = candidate_context.get("personal", {}).get("location", "").strip()
-    if location:
-        keywords.append(f"location:{location}")
-    return keywords
-
-
-def _updated_resume_keywords(pack: object, jd_analysis: dict, candidate_context: dict) -> list[str]:
-    keywords = build_updated_resume_keywords(pack, jd_analysis)
-    location = candidate_context.get("personal", {}).get("location", "").strip()
-    if location:
-        keywords.append(f"location:{location}")
-    return keywords
 
 
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -996,242 +938,60 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     candidate_context = build_candidate_context(candidate_yaml_path)
                 # ─────────────────────────────────────────────────────────────────────
 
-                initial_analysis = analyze_jd(
-                    jd_text,
-                    _candidate_keywords(candidate_context),
-                    application_url=application_url,
-                )
-                min_score_for_pdf = float(cfg.get("generation", {}).get("min_score_for_pdf", 0))
-                if min_score_for_pdf > 0 and initial_analysis["score"] < min_score_for_pdf:
+                try:
+                    result = run_generation(
+                        jd_text=jd_text,
+                        application_url=application_url,
+                        requested_outputs=requested_outputs,
+                        job_id_for_app=job_id_for_app,
+                        user_id=user_id,
+                        candidate_context=candidate_context,
+                        cfg=cfg,
+                        db_path=db_path,
+                        applications_dir=applications_dir,
+                    )
+                except ScoreGateBlocked as exc:
                     self._json(
                         HTTPStatus.OK,
                         {
                             "score_gate": True,
-                            "score": initial_analysis["score"],
-                            "min_score": min_score_for_pdf,
-                            "archetype": initial_analysis.get("archetype"),
-                            "ats_vendor": initial_analysis.get("ats_vendor"),
+                            "score": exc.score,
+                            "min_score": exc.min_score,
+                            "archetype": exc.initial_analysis.get("archetype"),
+                            "ats_vendor": exc.initial_analysis.get("ats_vendor"),
                             "message": (
-                                f"Score {initial_analysis['score']} is below the configured minimum "
-                                f"of {min_score_for_pdf}. Generation skipped."
+                                f"Score {exc.score} is below the configured minimum "
+                                f"of {exc.min_score}. Generation skipped."
                             ),
-                            "analysis": initial_analysis,
+                            "analysis": exc.initial_analysis,
                         },
                     )
                     return
-                try:
-                    pack, usage_summary, detected_company = generate_pack(
-                        jd_text=jd_text,
-                        jd_analysis=initial_analysis,
-                        candidate_context=candidate_context,
-                        outputs=requested_outputs,
-                        application_url=application_url,
-                        config=cfg,
-                    )
-                except PackGenerationError as exc:
-                    if exc.usage_summary.get("attempts"):
-                        if cfg["mode"] == "saas":
-                            pg_record_api_usage(
-                                user_id,
-                                exc.usage_summary["attempts"],
-                                application_id=None,
-                                request_status="failed",
-                                error_message=str(exc),
-                            )
-                        else:
-                            record_api_usage(
-                                db_path,
-                                exc.usage_summary["attempts"],
-                                application_id=None,
-                                request_status="failed",
-                                error_message=str(exc),
-                            )
-                    raise ValueError(str(exc)) from exc
-
-                updated_analysis = analyze_jd(
-                    jd_text,
-                    _updated_resume_keywords(pack, initial_analysis, candidate_context),
-                    application_url=application_url,
-                )
-                tokens_used = int(usage_summary.get("total_tokens") or 0)
-                model_used = str(usage_summary.get("model_used") or cfg["llm"]["model"])
-                company = _pick_company_name(initial_analysis.get("company"), detected_company) or "Unknown Company"
-                role = initial_analysis.get("role") or "Untitled Role"
-                tex_string = render_tex(candidate_context, pack, initial_analysis)
-                last_slug_error = ""
-                for _ in range(8):
-                    if cfg["mode"] == "saas":
-                        _uid = user_id
-                        slug = make_slug(
-                            company, role,
-                            slug_exists_fn=lambda s: pg_application_slug_exists(_uid, s),
-                        )
-                    else:
-                        slug = make_slug(company, role, db_path=db_path)
-                    _cand_name = candidate_context.get("personal", {}).get("name") or "Candidate"
-                    _pdf_filename = re.sub(r"\s+", "_", _cand_name.strip()) + "_Resume.pdf"
-                    try:
-                        files = write_pack(
-                            applications_dir=str(applications_dir),
-                            slug=slug,
-                            jd_text=jd_text,
-                            application_url=application_url,
-                            pack=pack,
-                            tex_string=tex_string,
-                            requested_outputs=requested_outputs,
-                            candidate_name=_cand_name,
-                            usage_summary=usage_summary,
-                            initial_analysis=initial_analysis,
-                            updated_analysis=updated_analysis,
-                        )
-                    except FileExistsError:
-                        last_slug_error = f"Output folder already exists for slug {slug}."
-                        continue
-
-                    pdf_path = compile_pdf(
-                        files["resume_tex"],
-                        files["output_dir"],
-                        output_filename=_pdf_filename,
-                    )
-                    if pdf_path:
-                        files["resume_pdf"] = pdf_path
-                        _log.info("generate: compile_pdf succeeded path=%s", pdf_path)
-                    else:
-                        _log.warning(
-                            "generate: compile_pdf returned None — resume.pdf will not be uploaded "
-                            "(check compile_pdf ERROR lines above for pdflatex failure details)"
-                        )
-
-                    if cfg["mode"] == "saas":
-                        try:
-                            _log.info(
-                                "generate: calling upload_pack_files slug=%s output_dir=%s has_pdf=%s",
-                                slug,
-                                files["output_dir"],
-                                "resume_pdf" in files,
-                            )
-                            cloud_paths = upload_pack_files(user_id, slug, files["output_dir"])
-                            _log.info(
-                                "generate: upload_pack_files returned keys=%s resume_pdf_url=%r",
-                                list(cloud_paths.keys()),
-                                cloud_paths.get("resume_pdf_url"),
-                            )
-                            app_id = pg_insert_application(
-                                user_id=user_id,
-                                company=company,
-                                role=role,
-                                slug=slug,
-                                jd_raw=jd_text,
-                                jd_language=initial_analysis.get("language"),
-                                jd_location=initial_analysis.get("location"),
-                                job_application_url=application_url,
-                                resume_tex_url=cloud_paths.get("resume_tex_url"),
-                                resume_pdf_url=cloud_paths.get("resume_pdf_url"),
-                                cover_letter_url=cloud_paths.get("cover_letter_url"),
-                                linkedin_msg_url=cloud_paths.get("linkedin_msg_url"),
-                                email_draft_url=cloud_paths.get("email_draft_url"),
-                                cover_letter="cover_letter" in requested_outputs,
-                                linkedin_msg="linkedin_msg" in requested_outputs,
-                                email_draft="email_draft" in requested_outputs,
-                                tokens_used=tokens_used,
-                                model_used=model_used,
-                                initial_score=float(initial_analysis.get("score") or 0.0),
-                                updated_score=float(updated_analysis.get("score") or 0.0),
-                                usage_summary=usage_summary,
-                                archetype=initial_analysis.get("archetype"),
-                                job_id=job_id_for_app,
-                            )
-                            break
-                        except Exception as exc:
-                            if isinstance(exc, _pg_errors.UniqueViolation):
-                                last_slug_error = str(exc)
-                                continue
-                            raise
-                    else:
-                        try:
-                            app_id = insert_application(
-                                db_path=db_path,
-                                company=company,
-                                role=role,
-                                slug=slug,
-                                jd_raw=jd_text,
-                                jd_language=initial_analysis.get("language"),
-                                jd_location=initial_analysis.get("location"),
-                                job_application_url=application_url,
-                                outputs_path=files["output_dir"],
-                                resume_tex_path=files["resume_tex"],
-                                resume_pdf_path=files.get("resume_pdf"),
-                                cover_letter="cover_letter" in requested_outputs,
-                                linkedin_msg="linkedin_msg" in requested_outputs,
-                                email_draft="email_draft" in requested_outputs,
-                                tokens_used=tokens_used,
-                                model_used=model_used,
-                                initial_score=float(initial_analysis.get("score") or 0.0),
-                                updated_score=float(updated_analysis.get("score") or 0.0),
-                                usage_summary=usage_summary,
-                                archetype=initial_analysis.get("archetype"),
-                            )
-                            break
-                        except sqlite3.IntegrityError as exc:
-                            if "applications.slug" not in str(exc).lower() and "applications.slug" not in repr(exc).lower():
-                                raise
-                            last_slug_error = str(exc)
-                            continue
-                else:
-                    raise ValueError(
-                        last_slug_error or "Could not allocate a unique application slug after multiple attempts."
-                    )
-
-                if cfg["mode"] == "saas":
-                    if job_id_for_app:
-                        try:
-                            link_job_to_application(user_id, job_id_for_app, app_id)
-                        except Exception:
-                            _log.warning(
-                                "Failed to link job %s to application %s",
-                                job_id_for_app, app_id,
-                            )
-                    pg_record_api_usage(
-                        user_id,
-                        usage_summary.get("attempts", []),
-                        application_id=app_id,
-                        request_status="succeeded",
-                    )
-                    pg_refresh_daily_stats(user_id)
-                    shutil.rmtree(files["output_dir"], ignore_errors=True)
-                else:
-                    record_api_usage(
-                        db_path,
-                        usage_summary.get("attempts", []),
-                        application_id=app_id,
-                        request_status="succeeded",
-                    )
-                    refresh_daily_stats(db_path)
 
                 self._json(
                     HTTPStatus.OK,
                     {
-                        "slug": slug,
-                        "app_id": app_id,
-                        "company": company,
-                        "role": role,
+                        "slug": result.slug,
+                        "app_id": result.app_id,
+                        "company": result.company,
+                        "role": result.role,
                         "application_url": application_url,
-                        "score": updated_analysis.get("score"),
-                        "initial_score": initial_analysis.get("score"),
-                        "updated_score": updated_analysis.get("score"),
-                        "archetype": initial_analysis.get("archetype"),
-                        "ats_vendor": initial_analysis.get("ats_vendor"),
-                        "exact_phrases": initial_analysis.get("exact_phrases", []),
-                        "tokens_used": tokens_used,
-                        "usage": usage_summary,
-                        "analysis": initial_analysis,
-                        "initial_analysis": initial_analysis,
-                        "updated_analysis": updated_analysis,
-                        "pack": pack.model_dump(),
+                        "score": result.updated_analysis.get("score"),
+                        "initial_score": result.initial_analysis.get("score"),
+                        "updated_score": result.updated_analysis.get("score"),
+                        "archetype": result.initial_analysis.get("archetype"),
+                        "ats_vendor": result.initial_analysis.get("ats_vendor"),
+                        "exact_phrases": result.initial_analysis.get("exact_phrases", []),
+                        "tokens_used": result.tokens_used,
+                        "usage": result.usage_summary,
+                        "analysis": result.initial_analysis,
+                        "initial_analysis": result.initial_analysis,
+                        "updated_analysis": result.updated_analysis,
+                        "pack": result.pack.model_dump(),
                         "files": _serialize_files(
-                            slug,
-                            files,
-                            cloud_paths=cloud_paths if cfg["mode"] == "saas" else None,
+                            result.slug,
+                            result.files,
+                            cloud_paths=result.cloud_paths if cfg["mode"] == "saas" else None,
                         ),
                     },
                 )
