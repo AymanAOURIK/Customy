@@ -1,5 +1,5 @@
 /**
- * CProfileEditor — profile create/edit form for SaaS mode.
+ * CProfileEditor — profile create/edit form.
  *
  * The backend contract remains JSON-based. The visible UI uses structured
  * editors and keeps hidden JSON fields in sync before save.
@@ -28,11 +28,36 @@
       (type ? " profile-editor-status--" + type : "");
   }
 
-  function _normalizeProfileResponse(body) {
-    if (body && typeof body === "object" && Object.prototype.hasOwnProperty.call(body, "exists")) {
-      return body;
-    }
-    return { exists: true, profile: body || {} };
+  function _extractProfileBody(body) {
+    if (!body || typeof body !== "object") return {};
+    if (body.profile && typeof body.profile === "object") return body.profile;
+
+    var profile = {};
+    [
+      "user_id", "full_name", "email", "phone", "location",
+      "linkedin", "github", "headline", "summary", "skills",
+      "experiences", "education", "spoken_languages", "scoring_keywords",
+    ].forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(body, key)) {
+        profile[key] = body[key];
+      }
+    });
+    return profile;
+  }
+
+  function _normalizeProfileResponse(body, options) {
+    var normalized = (body && typeof body === "object") ? body : {};
+    var exists = Object.prototype.hasOwnProperty.call(normalized, "exists")
+      ? normalized.exists !== false
+      : !(options && options.defaultExists === false);
+
+    return {
+      exists: exists,
+      profile: _extractProfileBody(normalized),
+      profile_quality_report: normalized.profile_quality_report || null,
+      profile_enrichment_plan: normalized.profile_enrichment_plan || null,
+      source_coverage_report: normalized.source_coverage_report || null,
+    };
   }
 
   function _esc(str) {
@@ -529,7 +554,7 @@
         '<p class="pe-readiness-source-note">' +
         sourceCoverage.lost_signals_count +
         " detail" + (sourceCoverage.lost_signals_count !== 1 ? "s" : "") +
-        " from your source resume not yet captured in your profile." +
+        " from your uploaded resume are not yet reflected in your profile." +
         "</p>";
     }
 
@@ -580,11 +605,12 @@
       .then(function (result) {
         if (btn) btn.disabled = false;
         if (result.status === 200 || result.status === 201) {
-          _setUpdateMode(result.body);
+          var payload = _normalizeProfileResponse(result.body, { defaultExists: true });
+          _setUpdateMode(payload.profile);
           _renderReadinessBanner(
-            result.body.profile_quality_report,
-            result.body.profile_enrichment_plan,
-            result.body.source_coverage_report
+            payload.profile_quality_report,
+            payload.profile_enrichment_plan,
+            payload.source_coverage_report
           );
           _setStatus("Saved.", "success");
           setTimeout(function () { _setStatus(""); }, 3000);
@@ -613,7 +639,7 @@
       .then(function (result) {
         _setStatus("");
         if (result.status === 200) {
-          var payload = _normalizeProfileResponse(result.body);
+          var payload = _normalizeProfileResponse(result.body, { defaultExists: true });
           if (payload.exists === false) {
             _setCreateMode(payload.profile || {});
           } else {

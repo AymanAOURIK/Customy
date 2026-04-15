@@ -222,6 +222,7 @@
   function renderDownloads(files) {
     var DOWNLOAD_LABELS = {
       resume_pdf: "Resume PDF",
+      resume_tex: "LaTeX Source",
       cover_letter: "Cover Letter",
       linkedin_message: "LinkedIn Message",
       email_draft: "Email Draft",
@@ -232,6 +233,7 @@
       var key = entry[0];
       var file = entry[1];
       if (!file || !file.url) return;
+      if (key === "resume_tex" && !isAdminView()) return;
 
       var filename = (file.filename || file.path || file.url || "")
         .split("?")[0]
@@ -317,6 +319,7 @@
 
     if (blockers.length) {
       html +=
+        '<div class="studio-feedback-group">' +
         '<p class="studio-blocked-section-label">What to fix</p>' +
         '<ul class="studio-blocked-list">';
       blockers.forEach(function (b) {
@@ -326,17 +329,18 @@
           _esc(b.message || b.fix || "") +
           "</li>";
       });
-      html += "</ul>";
+      html += "</ul></div>";
     }
 
     if (recs.length) {
       html +=
+        '<div class="studio-feedback-group">' +
         '<p class="studio-blocked-section-label">Suggested improvements</p>' +
         '<ul class="studio-blocked-list">';
       recs.forEach(function (r) {
         html += "<li>" + _esc(r.title || r.instruction || "") + "</li>";
       });
-      html += "</ul>";
+      html += "</ul></div>";
     }
 
     html +=
@@ -410,11 +414,11 @@
       "</div>";
 
     if (issues.length) {
-      html += '<ul class="studio-risk-issues">';
+      html += '<div class="studio-feedback-group"><ul class="studio-risk-issues">';
       issues.forEach(function (issue) {
         html += "<li>" + _esc(issue.message || "") + "</li>";
       });
-      html += "</ul>";
+      html += "</ul></div>";
     }
 
     fullnessRiskEl.innerHTML = html;

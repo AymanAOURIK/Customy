@@ -117,7 +117,7 @@
         "<span class=\"onboarding-note\">" +
         scr.lost_signals_count + " detail" +
         (scr.lost_signals_count !== 1 ? "s" : "") +
-        " from your source resume not yet captured in your profile." +
+        " from your uploaded resume are not yet reflected in your profile." +
         "</span>"
       );
     }
