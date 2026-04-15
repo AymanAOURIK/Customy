@@ -13,6 +13,8 @@
   var emptyState = document.getElementById("studio-empty-state");
   var blockedPanel = document.getElementById("studio-blocked-panel");
   var fullnessRiskEl = document.getElementById("studio-fullness-risk");
+  var profileHintsCard = document.getElementById("studio-profile-hints-card");
+  var profileHintsEl = document.getElementById("studio-profile-hints");
   var adminMetricCards = document.querySelectorAll(".studio-metric-card--admin");
   var isSaas = !!(window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas");
 
@@ -92,19 +94,6 @@
       });
       lines.push("");
     });
-    if ((pack.focus_areas || []).length) {
-      lines.push(isFrench ? "AXES DE CIBLAGE" : "FOCUS AREAS");
-      pack.focus_areas.forEach(function (item) {
-        lines.push("- " + item);
-      });
-    }
-    if ((pack.profile_update_hints || []).length) {
-      lines.push("");
-      lines.push(isFrench ? "NOTES DE PROFIL" : "PROFILE REVIEW NOTES");
-      pack.profile_update_hints.forEach(function (item) {
-        lines.push("- " + item);
-      });
-    }
     return lines.join("\n").trim();
   }
 
@@ -129,9 +118,37 @@
     downloadLinks.innerHTML = "";
     tabButtons.innerHTML = "";
     tabPanes.innerHTML = "";
+    clearProfileHints();
     if (emptyState) {
       tabPanes.appendChild(emptyState);
     }
+  }
+
+  function clearProfileHints() {
+    if (!profileHintsCard || !profileHintsEl) return;
+    profileHintsEl.innerHTML = "";
+    profileHintsCard.hidden = true;
+  }
+
+  function renderProfileHints(pack) {
+    if (!profileHintsCard || !profileHintsEl) return;
+    var hints = (pack && pack.profile_update_hints) || [];
+    profileHintsEl.innerHTML = "";
+    if (!hints.length) {
+      profileHintsCard.hidden = true;
+      return;
+    }
+
+    var list = document.createElement("ul");
+    list.className = "studio-profile-hints-list";
+    hints.forEach(function (hint) {
+      var item = document.createElement("li");
+      item.textContent = hint;
+      list.appendChild(item);
+    });
+
+    profileHintsEl.appendChild(list);
+    profileHintsCard.hidden = false;
   }
 
   function renderTabs(data) {
@@ -203,6 +220,13 @@
   }
 
   function renderDownloads(files) {
+    var DOWNLOAD_LABELS = {
+      resume_pdf: "Resume PDF",
+      cover_letter: "Cover Letter",
+      linkedin_message: "LinkedIn Message",
+      email_draft: "Email Draft",
+    };
+
     downloadLinks.innerHTML = "";
     Object.entries(files || {}).forEach(function (entry) {
       var key = entry[0];
@@ -222,8 +246,7 @@
         link.target = "_blank";
         link.rel = "noreferrer";
       }
-      link.textContent =
-        key === "cover_letter" ? filename || "cover_letter.txt" : key.replaceAll("_", " ");
+      link.textContent = DOWNLOAD_LABELS[key] || key.replaceAll("_", " ");
       link.title = filename || key;
       downloadLinks.appendChild(link);
     });
@@ -339,6 +362,7 @@
     if (tabPanes) tabPanes.hidden = true;
     if (tabButtons) tabButtons.hidden = true;
     if (downloadLinks) downloadLinks.hidden = true;
+    if (profileHintsCard) profileHintsCard.hidden = true;
   }
 
   function clearBlockedState() {
@@ -349,6 +373,9 @@
     if (tabPanes) tabPanes.removeAttribute("hidden");
     if (tabButtons) tabButtons.removeAttribute("hidden");
     if (downloadLinks) downloadLinks.removeAttribute("hidden");
+    if (profileHintsEl && profileHintsEl.innerHTML.trim()) {
+      profileHintsCard.hidden = false;
+    }
   }
 
   /* ── Phase 2: resume fullness risk card ─────────────────── */
@@ -447,6 +474,7 @@
         renderAnalysis(data);
         renderDownloads(data.files);
         renderTabs(data);
+        renderProfileHints(data.pack);
         renderFullnessRisk(data.resume_fullness_risk);
         dispatchGenerationEvent(data);
         var savedLabel = [data.company, data.role].filter(Boolean).join(" - ");

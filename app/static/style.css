@@ -1092,6 +1092,28 @@ body.platform-body {
   line-height: 1.55;
 }
 
+.studio-profile-hints-card {
+  margin-top: 16px;
+}
+
+.studio-profile-hints {
+  border: 1px solid var(--shell-border);
+  border-radius: 12px;
+  background: var(--shell-surface-soft);
+  padding: 16px 18px;
+}
+
+.studio-profile-hints-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--shell-text-strong);
+  line-height: 1.6;
+}
+
+.studio-profile-hints-list li + li {
+  margin-top: 8px;
+}
+
 /* ── Quick stats ────────────────────────────────────────── */
 
 .quick-stats-grid {
