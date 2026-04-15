@@ -2540,13 +2540,6 @@ body.profile-gate #studio-generate-btn {
 
 .pe-required { color: var(--shell-danger, #9a3e31); }
 
-.pe-field-type {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--shell-text-muted, #888);
-  font-family: ui-monospace, monospace;
-}
-
 .pe-input,
 .pe-textarea {
   width: 100%;
@@ -2568,22 +2561,144 @@ body.profile-gate #studio-generate-btn {
   box-shadow: 0 0 0 3px var(--shell-accent-soft, rgba(141,93,47,.12));
 }
 
-.pe-textarea--mono {
-  font-family: ui-monospace, 'Cascadia Code', monospace;
-  font-size: 0.8rem;
-  line-height: 1.55;
-}
-
 .pe-divider {
   border: none;
   border-top: 1px solid var(--shell-border, rgba(0,0,0,.08));
   margin: 4px 0;
 }
 
-.pe-json-hint {
+.pe-hidden-json {
+  display: none;
+}
+
+.pe-structured-block {
+  display: grid;
+  gap: 12px;
+}
+
+.pe-tag-group,
+.pe-entry-card {
+  border: 1px solid var(--shell-border, rgba(0,0,0,.1));
+  border-radius: 12px;
+  background: var(--shell-input-bg, #fafafa);
+  padding: 12px;
+}
+
+.pe-tag-group-header,
+.pe-entry-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pe-tag-group-title,
+.pe-entry-card-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--shell-text, #111);
+}
+
+.pe-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.pe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--shell-surface-soft, rgba(0,0,0,.04));
+  border: 1px solid var(--shell-border, rgba(0,0,0,.08));
   font-size: 0.8rem;
-  color: var(--shell-text-muted, #888);
-  margin: 0;
+  color: var(--shell-text, #111);
+}
+
+.pe-chip-remove,
+.pe-card-remove,
+.pe-bullet-remove {
+  border: none;
+  background: transparent;
+  color: var(--shell-text-muted, #666);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.pe-chip-remove:hover,
+.pe-card-remove:hover,
+.pe-bullet-remove:hover {
+  color: var(--shell-danger, #9a3e31);
+}
+
+.pe-chip-input-row,
+.pe-inline-actions,
+.pe-bullet-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.pe-chip-input,
+.pe-bullet-input {
+  flex: 1 1 auto;
+}
+
+.pe-chip-add-btn {
+  white-space: nowrap;
+}
+
+.pe-card-list,
+.pe-bullet-list {
+  display: grid;
+  gap: 12px;
+}
+
+.pe-entry-card-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pe-entry-card-fields.pe-entry-card-fields--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pe-bullet-list {
+  margin-top: 8px;
+}
+
+.pe-bullet-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.pe-empty-state {
+  border: 1px dashed var(--shell-border, rgba(0,0,0,.12));
+  border-radius: 12px;
+  padding: 14px;
+  color: var(--shell-text-muted, #666);
+  background: var(--shell-surface, #fff);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 720px) {
+  .pe-entry-card-fields,
+  .pe-entry-card-fields.pe-entry-card-fields--triple,
+  .pe-chip-input-row,
+  .pe-bullet-add-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .pe-actions {

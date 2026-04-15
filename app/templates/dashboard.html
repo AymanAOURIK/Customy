@@ -984,35 +984,81 @@
                   </div>
 
                   <hr class="pe-divider" />
-                  <p class="pe-json-hint">The fields below are stored as JSON. Edit them directly as JSON arrays or objects.</p>
 
                   <!-- Skills -->
                   <div class="pe-field pe-field--full">
-                    <label class="pe-label" for="pe-skills">Skills <span class="pe-field-type">object</span></label>
-                    <textarea id="pe-skills" class="pe-textarea pe-textarea--mono" rows="6" placeholder='{"Python": 5, "React": 4}'></textarea>
+                    <label class="pe-label" for="pe-skill-input-languages">Skills</label>
+                    <div class="pe-structured-block">
+                      <div class="pe-tag-group">
+                        <div class="pe-tag-group-header"><span class="pe-tag-group-title">Languages</span></div>
+                        <div id="pe-skill-list-languages" class="pe-chip-list" aria-live="polite"></div>
+                        <div class="pe-chip-input-row">
+                          <input id="pe-skill-input-languages" type="text" class="pe-input pe-chip-input" placeholder="Add a language and press Enter" />
+                          <button type="button" class="btn-secondary pe-chip-add-btn" data-pe-add-tag="languages">Add</button>
+                        </div>
+                      </div>
+                      <div class="pe-tag-group">
+                        <div class="pe-tag-group-header"><span class="pe-tag-group-title">Frameworks</span></div>
+                        <div id="pe-skill-list-frameworks" class="pe-chip-list" aria-live="polite"></div>
+                        <div class="pe-chip-input-row">
+                          <input id="pe-skill-input-frameworks" type="text" class="pe-input pe-chip-input" placeholder="Add a framework and press Enter" />
+                          <button type="button" class="btn-secondary pe-chip-add-btn" data-pe-add-tag="frameworks">Add</button>
+                        </div>
+                      </div>
+                      <div class="pe-tag-group">
+                        <div class="pe-tag-group-header"><span class="pe-tag-group-title">Tools</span></div>
+                        <div id="pe-skill-list-tools" class="pe-chip-list" aria-live="polite"></div>
+                        <div class="pe-chip-input-row">
+                          <input id="pe-skill-input-tools" type="text" class="pe-input pe-chip-input" placeholder="Add a tool and press Enter" />
+                          <button type="button" class="btn-secondary pe-chip-add-btn" data-pe-add-tag="tools">Add</button>
+                        </div>
+                      </div>
+                      <div class="pe-tag-group">
+                        <div class="pe-tag-group-header"><span class="pe-tag-group-title">Soft Skills</span></div>
+                        <div id="pe-skill-list-soft" class="pe-chip-list" aria-live="polite"></div>
+                        <div class="pe-chip-input-row">
+                          <input id="pe-skill-input-soft" type="text" class="pe-input pe-chip-input" placeholder="Add a soft skill and press Enter" />
+                          <button type="button" class="btn-secondary pe-chip-add-btn" data-pe-add-tag="soft">Add</button>
+                        </div>
+                      </div>
+                    </div>
+                    <textarea id="pe-skills" class="pe-hidden-json" hidden aria-hidden="true"></textarea>
                   </div>
 
                   <!-- Experiences -->
                   <div class="pe-field pe-field--full">
-                    <label class="pe-label" for="pe-experiences">Experiences <span class="pe-field-type">array</span></label>
-                    <textarea id="pe-experiences" class="pe-textarea pe-textarea--mono" rows="8" placeholder='[{"title": "Engineer", "company": "Acme", "start": "2022-01", "end": null, "bullets": []}]'></textarea>
+                    <label class="pe-label" for="pe-add-experience-btn">Experiences</label>
+                    <div id="pe-experiences-list" class="pe-card-list" aria-live="polite"></div>
+                    <div class="pe-inline-actions">
+                      <button id="pe-add-experience-btn" type="button" class="btn-secondary">Add Experience</button>
+                    </div>
+                    <textarea id="pe-experiences" class="pe-hidden-json" hidden aria-hidden="true"></textarea>
                   </div>
 
                   <!-- Education -->
                   <div class="pe-field pe-field--full">
-                    <label class="pe-label" for="pe-education">Education <span class="pe-field-type">array</span></label>
-                    <textarea id="pe-education" class="pe-textarea pe-textarea--mono" rows="5" placeholder='[{"degree": "MSc Computer Science", "school": "University Name", "year": "2020"}]'></textarea>
+                    <label class="pe-label" for="pe-add-education-btn">Education</label>
+                    <div id="pe-education-list" class="pe-card-list" aria-live="polite"></div>
+                    <div class="pe-inline-actions">
+                      <button id="pe-add-education-btn" type="button" class="btn-secondary">Add Education</button>
+                    </div>
+                    <textarea id="pe-education" class="pe-hidden-json" hidden aria-hidden="true"></textarea>
                   </div>
 
                   <!-- Row: spoken_languages + scoring_keywords -->
                   <div class="pe-row">
                     <div class="pe-field">
-                      <label class="pe-label" for="pe-spoken_languages">Spoken Languages <span class="pe-field-type">array</span></label>
-                      <textarea id="pe-spoken_languages" class="pe-textarea pe-textarea--mono" rows="3" placeholder='["English", "French"]'></textarea>
+                      <label class="pe-label" for="pe-spoken-language-input">Spoken Languages</label>
+                      <div id="pe-spoken-language-list" class="pe-chip-list" aria-live="polite"></div>
+                      <div class="pe-chip-input-row">
+                        <input id="pe-spoken-language-input" type="text" class="pe-input pe-chip-input" placeholder="Add a spoken language and press Enter" />
+                        <button type="button" class="btn-secondary pe-chip-add-btn" data-pe-add-tag="spoken_languages">Add</button>
+                      </div>
+                      <textarea id="pe-spoken_languages" class="pe-hidden-json" hidden aria-hidden="true"></textarea>
                     </div>
                     <div class="pe-field">
-                      <label class="pe-label" for="pe-scoring_keywords">Scoring Keywords <span class="pe-field-type">array</span></label>
-                      <textarea id="pe-scoring_keywords" class="pe-textarea pe-textarea--mono" rows="3" placeholder='["LLM", "Python", "REST API"]'></textarea>
+                      <label class="pe-label" for="pe-scoring_keywords">Scoring Keywords</label>
+                      <textarea id="pe-scoring_keywords" class="pe-textarea" rows="3" placeholder='["LLM", "Python", "REST API"]'></textarea>
                     </div>
                   </div>
 
