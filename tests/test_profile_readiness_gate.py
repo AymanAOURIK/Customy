@@ -148,6 +148,52 @@ class ProfileReadinessGateTests(unittest.TestCase):
         self.assertEqual(result["profile_quality_report"]["overall_status"], "review")
         self.assertEqual(result["profile_enrichment_plan"]["overall_status"], "review")
 
+    def test_recent_metric_and_system_gaps_are_warnings_not_blockers(self):
+        review_profile = _saved_profile(
+            experiences=[
+                {
+                    "role": "AI Engineer",
+                    "company": "Acme Labs",
+                    "start": "2024-01",
+                    "end": "Present",
+                    "bullets": [
+                        "Improved internal operations workflows for customer support.",
+                        "Coordinated platform improvements across product teams.",
+                    ],
+                },
+                {
+                    "role": "Data Engineer",
+                    "company": "Beta Systems",
+                    "start": "2022-01",
+                    "end": "2023-12",
+                    "bullets": [
+                        "Maintained finance reporting workflows for business stakeholders.",
+                        "Supported analytics delivery for recurring reporting needs.",
+                    ],
+                },
+            ],
+        )
+
+        result = evaluate_saved_profile_readiness(review_profile)
+        blocker_codes = {item["code"] for item in result["profile_quality_report"]["blockers"]}
+        warning_items = {
+            item["code"]: item for item in result["profile_quality_report"]["warnings"]
+        }
+
+        self.assertEqual(result["profile_readiness_gate"]["decision"], "allow")
+        self.assertEqual(result["profile_readiness_gate"]["status"], "review")
+        self.assertEqual(result["profile_quality_report"]["overall_status"], "review")
+        self.assertNotIn("no_recent_metric_proof", blocker_codes)
+        self.assertNotIn("no_recent_named_system_proof", blocker_codes)
+        self.assertEqual(
+            warning_items["no_recent_metric_proof"]["message"],
+            "Consider adding numbers or measurable results to strengthen your recent roles.",
+        )
+        self.assertEqual(
+            warning_items["no_recent_named_system_proof"]["message"],
+            "Consider adding tools or systems used in your recent roles.",
+        )
+
     def test_ready_profile_allows_generation(self):
         result = evaluate_saved_profile_readiness(_saved_profile())
 

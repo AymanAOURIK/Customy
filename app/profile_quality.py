@@ -256,12 +256,12 @@ def _apply_evidence_rules(
             )
         )
     if recent_metric_bearing_bullets == 0:
-        blockers.append(
+        warnings.append(
             _issue(
                 code="no_recent_metric_proof",
-                severity="blocker",
+                severity="warning",
                 dimension="evidence_density",
-                message="The two most recent roles have no bullet points with numbers or results.",
+                message="Consider adding numbers or measurable results to strengthen your recent roles.",
             )
         )
     elif recent_metric_bearing_bullets < 2:
@@ -275,12 +275,12 @@ def _apply_evidence_rules(
             )
         )
     if recent_named_system_or_tool_bullets == 0:
-        blockers.append(
+        warnings.append(
             _issue(
                 code="no_recent_named_system_proof",
-                severity="blocker",
+                severity="warning",
                 dimension="evidence_density",
-                message="The two most recent roles do not name specific systems, tools, or platforms.",
+                message="Consider adding tools or systems used in your recent roles.",
             )
         )
     elif recent_named_system_or_tool_bullets < 2:
