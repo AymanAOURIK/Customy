@@ -29,6 +29,9 @@
   var _selectedArchetype = "";
   var _minScore = 0;
   var _isSaas = !!(window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas");
+  var _isLoading = false;
+  var _hasLoaded = false;
+  var _loadVersion = 0;
 
   /* ── DOM refs ────────────────────────────────────────── */
 
@@ -66,17 +69,48 @@
 
   function fmtDate(iso) {
     if (!iso) return "-";
-    try {
-      return iso.slice(0, 10);
-    } catch (_) {
-      return iso;
+    var raw = String(iso).trim();
+    if (!raw) return "-";
+    var parsed = new Date(raw);
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     }
+    return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : "-";
+  }
+
+  function toFiniteNumber(value) {
+    if (window.CUtils) return CUtils.toFiniteNumber(value);
+    var n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatScore(value) {
+    if (window.CUtils) return CUtils.formatScore(value);
+    var n = toFiniteNumber(value);
+    return n === null ? "-" : n.toFixed(1);
+  }
+
+  function readyLabel(count) {
+    return count === 1 ? "1 ready" : count + " ready";
+  }
+
+  function setReadyCount(label, isLoading) {
+    if (!readyCount) return;
+    readyCount.textContent = label;
+    readyCount.classList.toggle("aq-count-chip--loading", !!isLoading);
+  }
+
+  function renderLoadingRow(message) {
+    if (!tableBody) return;
+    tableBody.innerHTML =
+      '<tr><td colspan="8" class="aq-empty-row">' + escHtml(message || "Loading queue…") + "</td></tr>";
   }
 
   function scoreClass(score) {
-    if (score == null) return "aq-score--none";
-    if (score >= 70) return "aq-score--high";
-    if (score >= 50) return "aq-score--mid";
+    var n = toFiniteNumber(score);
+    if (n === null) return "aq-score--none";
+    if (n >= 70) return "aq-score--high";
+    if (n >= 50) return "aq-score--mid";
     return "aq-score--low";
   }
 
@@ -96,20 +130,35 @@
   /* ── Load queue ──────────────────────────────────────── */
 
   function loadQueue() {
-    if (tableBody) {
-      tableBody.innerHTML =
-        '<tr><td colspan="8" class="aq-empty-row">Loading&hellip;</td></tr>';
+    var requestVersion = ++_loadVersion;
+    _isLoading = true;
+
+    if (!_hasLoaded) {
+      setReadyCount("Loading…", true);
+      renderLoadingRow("Loading queue…");
+    } else {
+      setReadyCount(readyLabel(_queue.filter(function (app) {
+        return !_selectedArchetype || app.archetype === _selectedArchetype;
+      }).length), true);
     }
-    apiFetch("/api/apply-queue?min_score=" + _minScore)
+
+    return apiFetch("/api/apply-queue?min_score=" + _minScore)
       .then(function (data) {
+        if (requestVersion !== _loadVersion) return;
         _queue = data.applications || [];
+        _isLoading = false;
+        _hasLoaded = true;
         renderQueue();
       })
       .catch(function (err) {
-        if (tableBody) {
-          tableBody.innerHTML =
-            '<tr><td colspan="8" class="aq-empty-row">' + escHtml(err.message || "Failed to load queue.") + "</td></tr>";
+        if (requestVersion !== _loadVersion) return;
+        _isLoading = false;
+        if (!_hasLoaded) {
+          setReadyCount("Unavailable", false);
+          renderLoadingRow(err.message || "Failed to load queue.");
+          return;
         }
+        renderQueue();
       });
   }
 
@@ -122,7 +171,7 @@
     });
 
     if (readyCount) {
-      readyCount.textContent = filtered.length + " ready";
+      setReadyCount(readyLabel(filtered.length), _isLoading);
     }
 
     if (!filtered.length) {
@@ -134,17 +183,17 @@
 
     tableBody.innerHTML = filtered
       .map(function (app) {
-        var score = app.score != null ? Number(app.score).toFixed(1) : "-";
+        var score = formatScore(app.score);
         var sClass = scoreClass(app.score);
         var arch = app.archetype || "general";
         var archLabel = ARCHETYPE_LABELS[arch] || arch;
         var ats = escHtml(app.ats_vendor || "-");
         var helperButtons = _isSaas
-          ? '<button class="aq-btn" disabled title="Available only in local mode">Auto-fill</button>' +
-            '<button class="aq-btn" disabled title="Available only in local mode">Answers</button>'
-          : '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Auto-fill</button>' +
+          ? '<button class="aq-btn" disabled>Form Assist</button>' +
+            '<button class="aq-btn" disabled>Answers</button>'
+          : '<button class="aq-btn aq-btn--fill" onclick="AQ.openFillSnippet(' + app.id + ')">Form Assist</button>' +
             '<button class="aq-btn" onclick="AQ.openAnswers(' + app.id + ')">Answers</button>';
-        var packageLabel = _isSaas ? "Files" : "Package";
+        var packageLabel = "Files";
 
         return (
           "<tr>" +

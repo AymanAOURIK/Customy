@@ -85,6 +85,24 @@
     return Math.round((value / total) * 100) + "%";
   }
 
+  function toFiniteNumber(value) {
+    if (window.CUtils) return CUtils.toFiniteNumber(value);
+    var n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function countValue(value) {
+    var n = toFiniteNumber(value);
+    return n === null ? 0 : n;
+  }
+
+  function formatDateCell(value) {
+    if (!value) return "-";
+    var raw = String(value).trim();
+    if (!raw) return "-";
+    return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : "-";
+  }
+
   function scoreClass(score) {
     var n = Number(score || 0);
     if (n >= 70) return "shell-score-green";
@@ -92,6 +110,7 @@
     return "shell-score-red";
   }
 
+  var formatNumber = CUtils.formatNumber;
   var formatUsd = CUtils.formatUsd;
   var formatScore = CUtils.formatScore;
 
@@ -150,12 +169,13 @@
       ["ghosted", "Ghosted"],
     ];
     var total = Object.values(funnel).reduce(function (s, v) {
-      return s + Number(v || 0);
+      return s + countValue(v);
     }, 0);
     kpiGrid.innerHTML = "";
     labels.forEach(function (pair) {
       var key = pair[0];
       var label = pair[1];
+      var value = countValue(funnel[key]);
       var el = document.createElement("div");
       el.className = "kpi-card";
       el.innerHTML =
@@ -163,10 +183,10 @@
         label +
         "</div>" +
         '<div class="kpi-value">' +
-        (funnel[key] || 0) +
+        formatNumber(value) +
         "</div>" +
         '<div class="kpi-meta">' +
-        percent(funnel[key] || 0, total) +
+        percent(value, total) +
         " of total</div>";
       kpiGrid.appendChild(el);
     });
@@ -176,8 +196,8 @@
 
   function renderQuickStats(stats) {
     var items = [
-      ["This Week", stats.applications_this_week || 0],
-      ["This Month", stats.applications_this_month || 0],
+      ["This Week", formatNumber(stats.applications_this_week)],
+      ["This Month", formatNumber(stats.applications_this_month)],
       ["Avg Initial Score", formatScore(stats.average_initial_score)],
       ["Avg Updated Score", formatScore(stats.average_updated_score)],
       ["Top Role", stats.most_targeted_role || "-"],
@@ -207,18 +227,18 @@
     var costItems = [
       ["Total API Cost", formatUsd(stats.openai_total_cost_usd)],
       ["Avg Cost / Gen", formatUsd(stats.openai_average_cost_usd)],
-      ["Total Tokens", (stats.openai_total_tokens || 0).toLocaleString()],
-      ["Prompt Tokens", (stats.openai_prompt_tokens || 0).toLocaleString()],
+      ["Total Tokens", formatNumber(stats.openai_total_tokens)],
+      ["Prompt Tokens", formatNumber(stats.openai_prompt_tokens)],
       [
         "Cached Tokens",
-        (stats.openai_cached_prompt_tokens || 0).toLocaleString(),
+        formatNumber(stats.openai_cached_prompt_tokens),
       ],
       [
         "Completion Tokens",
-        (stats.openai_completion_tokens || 0).toLocaleString(),
+        formatNumber(stats.openai_completion_tokens),
       ],
-      ["API Requests", stats.openai_request_count || 0],
-      ["Failed Requests", stats.openai_failed_request_count || 0],
+      ["API Requests", formatNumber(stats.openai_request_count)],
+      ["Failed Requests", formatNumber(stats.openai_failed_request_count)],
     ];
     costStats.innerHTML = "";
     costItems.forEach(function (pair) {
@@ -261,11 +281,11 @@
 
   function outputLinks(outputs) {
     var labels = {
-      resume_pdf: "PDF",
-      cover_letter: "CL",
-      linkedin_message: "LI",
-      email_draft: "EM",
-      resume_tex: "TEX",
+      resume_pdf: "Resume PDF",
+      cover_letter: "Cover Letter",
+      linkedin_message: "LinkedIn Message",
+      email_draft: "Email Draft",
+      resume_tex: "Resume Source",
     };
     var wrap = document.createElement("div");
     wrap.className = "shell-outputs-cell";
@@ -331,7 +351,7 @@
       statusOptions.forEach(function (status) {
         var opt = document.createElement("option");
         opt.value = status;
-        opt.textContent = status;
+        opt.textContent = status.charAt(0).toUpperCase() + status.slice(1);
         opt.selected = item.status === status;
         select.appendChild(opt);
       });
@@ -353,8 +373,8 @@
       var filesBtn = document.createElement("button");
       filesBtn.type = "button";
       filesBtn.className = "shell-small-btn";
-      filesBtn.textContent = isSaas ? "Files" : "Folder";
-      filesBtn.title = isSaas ? "Open generated files" : item.folder_path || "";
+      filesBtn.textContent = "Files";
+      filesBtn.title = isSaas ? "Open generated files" : (item.folder_path || "Open generated files");
       filesBtn.disabled = isSaas ? !item.id : !item.folder_url;
       filesBtn.addEventListener("click", function () {
         if (isSaas) {
@@ -386,10 +406,10 @@
       dupBtn.type = "button";
       dupBtn.className =
         "shell-small-btn" + (item.is_duplicate ? " flag-active" : "");
-      dupBtn.textContent = item.is_duplicate ? "Undup" : "Dup";
+      dupBtn.textContent = item.is_duplicate ? "Clear Duplicate" : "Mark Duplicate";
       dupBtn.title = item.is_duplicate
-        ? "Include in stats again"
-        : "Mark as duplicate, exclude from stats";
+        ? "Clear duplicate status and include this application in stats again"
+        : "Mark as a duplicate and exclude this application from stats";
       dupBtn.addEventListener("click", function () {
         dupBtn.disabled = true;
         updateDuplicateFlag(item.id, !item.is_duplicate)
@@ -407,12 +427,12 @@
 
       row.innerHTML =
         "<td>" +
-        (item.created_at || "").slice(0, 10) +
+        formatDateCell(item.created_at) +
         "</td>" +
         "<td>" +
         (item.company || "") +
         (item.is_duplicate
-          ? ' <span class="shell-flag-badge">Dup</span>'
+          ? ' <span class="shell-flag-badge">Duplicate</span>'
           : "") +
         "</td>" +
         "<td>" +
@@ -469,7 +489,7 @@
       Math.max.apply(
         null,
         points.map(function (p) {
-          return Number(p.generated || 0);
+          return countValue(p.generated);
         })
       )
     );
@@ -519,7 +539,7 @@
     // Bars
     var bw = iw / Math.max(points.length, 1) - 4;
     points.forEach(function (pt, i) {
-      var val = Number(pt.generated || 0);
+      var val = countValue(pt.generated);
       var bh = (val / maxVal) * ih;
       var x = m.left + i * (bw + 4);
       var y = m.top + ih - bh;

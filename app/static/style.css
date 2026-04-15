@@ -1356,16 +1356,17 @@ body.platform-body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
   border-radius: 7px;
   background: var(--shell-surface-soft-alt);
   border: 1px solid var(--shell-border);
   text-decoration: none;
   color: var(--shell-text);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
   transition: background 100ms ease;
+  white-space: nowrap;
 }
 
 .shell-icon-link:hover {
@@ -1375,6 +1376,7 @@ body.platform-body {
 .shell-action-row {
   display: flex;
   gap: 5px;
+  flex-wrap: wrap;
 }
 
 .shell-small-btn {
@@ -1657,6 +1659,8 @@ body.platform-body {
 .aq-count-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 7rem;
   padding: 4px 12px;
   border-radius: 20px;
   background: var(--shell-accent-soft);
@@ -1664,6 +1668,12 @@ body.platform-body {
   font-size: 0.8rem;
   font-weight: 600;
   border: 1px solid var(--shell-accent-border);
+}
+
+.aq-count-chip--loading {
+  background: var(--shell-surface-soft-alt);
+  color: var(--shell-text-soft);
+  border-color: var(--shell-border-soft);
 }
 
 .aq-filter-bar {
@@ -2200,7 +2210,30 @@ body.platform-body {
   margin: 4px 0 12px;
 }
 
+.aq-advanced-details {
+  margin-top: 12px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 10px;
+  background: var(--shell-surface-soft);
+}
+
+.aq-advanced-details summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--shell-text);
+}
+
+.aq-advanced-hint {
+  margin: 0 14px 12px;
+  font-size: 0.78rem;
+  color: var(--shell-text-soft);
+  line-height: 1.45;
+}
+
 .aq-fill-snippet-wrap {
+  margin: 0 14px 14px;
   border: 1px solid var(--shell-border-soft);
   border-radius: 8px;
   overflow: hidden;

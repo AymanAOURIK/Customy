@@ -89,8 +89,8 @@
 
         <div class="sidebar-footer">
           <div class="sidebar-help-card" id="sidebar-mode-card">
-            <p class="sidebar-help-title" id="sidebar-mode-title">Local Mode</p>
-            <p class="sidebar-help-text" id="sidebar-mode-text">All data stays on your machine. No cloud, no tracking.</p>
+            <p class="sidebar-help-title" id="sidebar-mode-title">Workspace</p>
+            <p class="sidebar-help-text" id="sidebar-mode-text">Manage your applications and profile here.</p>
           </div>
         </div>
       </aside>
@@ -227,10 +227,10 @@
             <div class="page-header">
               <div>
                 <h1>Apply Queue</h1>
-                <p>Generated applications ready to submit — sorted by fit score</p>
+                <p>Generated applications ready to review and submit</p>
               </div>
               <div class="page-header-actions">
-                <span id="aq-ready-count" class="aq-count-chip">0 ready</span>
+                <span id="aq-ready-count" class="aq-count-chip aq-count-chip--loading">Loading…</span>
               </div>
             </div>
 
@@ -271,7 +271,7 @@
                       <th>Role</th>
                       <th>Date</th>
                       <th>ATS</th>
-                      <th>Fill</th>
+                      <th>Helpers</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -319,20 +319,24 @@
               <div class="aq-modal aq-modal--wide">
                 <div class="aq-modal-header">
                   <div>
-                    <h3 class="aq-modal-title">Auto-fill Snippet</h3>
-                    <p class="aq-modal-sub">Open the job form → F12 → Console → paste this snippet → review every field → submit</p>
+                    <h3 class="aq-modal-title">Form Assist</h3>
+                    <p class="aq-modal-sub">Review the matched answers for this application.</p>
                   </div>
                   <button class="aq-modal-close" id="aq-fill-close" aria-label="Close">&times;</button>
                 </div>
                 <div class="aq-modal-body" id="aq-fill-body">
                   <div id="aq-fill-field-plan"></div>
-                  <div class="aq-fill-snippet-wrap">
-                    <div class="aq-fill-snippet-toolbar">
-                      <span class="aq-fill-vendor-label" id="aq-fill-vendor-label"></span>
-                      <button class="aq-copy-btn" id="aq-fill-copy-btn">Copy snippet</button>
+                  <details class="aq-advanced-details">
+                    <summary>Advanced: browser autofill script</summary>
+                    <p class="aq-advanced-hint">Use this only if you want to run the helper script in your browser console on the application form page.</p>
+                    <div class="aq-fill-snippet-wrap">
+                      <div class="aq-fill-snippet-toolbar">
+                        <span class="aq-fill-vendor-label" id="aq-fill-vendor-label"></span>
+                        <button class="aq-copy-btn" id="aq-fill-copy-btn">Copy script</button>
+                      </div>
+                      <pre class="aq-fill-snippet-pre" id="aq-fill-snippet-pre"></pre>
                     </div>
-                    <pre class="aq-fill-snippet-pre" id="aq-fill-snippet-pre"></pre>
-                  </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -532,8 +536,8 @@
             <div id="jt-local-notice" class="shell-card" hidden>
               <div class="placeholder-section">
                 <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-                <h3 class="placeholder-title">SaaS mode required</h3>
-                <p class="placeholder-text">Job management is available in SaaS mode only.</p>
+                <h3 class="placeholder-title">Job Tracker</h3>
+                <p class="placeholder-text">Job saving is not available in this workspace.</p>
               </div>
             </div>
 
@@ -803,7 +807,7 @@
             <div class="page-header">
               <div>
                 <h1>My Profile</h1>
-                <p>Edit your resume information</p>
+                <p>Your professional profile</p>
               </div>
             </div>
 
@@ -815,7 +819,7 @@
               <div class="placeholder-section">
                 <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <h3 class="placeholder-title">Profile Editor</h3>
-                <p class="placeholder-text">Profile management is available in SaaS mode. In local mode, edit <code>candidate.yaml</code> directly.</p>
+                <p class="placeholder-text">Profile details are managed outside this screen in this workspace.</p>
               </div>
             </div>
 
@@ -1469,11 +1473,11 @@
           return;
         }
 
-        /* ── SaaS mode: update sidebar badge ── */
+        /* ── Keep sidebar helper copy mode-agnostic ── */
         var modeTitle = document.getElementById("sidebar-mode-title");
         var modeText  = document.getElementById("sidebar-mode-text");
-        if (modeTitle) modeTitle.textContent = "SaaS Mode";
-        if (modeText)  modeText.textContent  = "Signed-in session. Data synced to the cloud.";
+        if (modeTitle) modeTitle.textContent = "Workspace";
+        if (modeText)  modeText.textContent  = "Manage your applications and profile here.";
 
         /* ── SaaS mode: invite-only — hide sign-up, show notice ── */
         var _signupTabBtn  = document.getElementById("auth-tab-signup");

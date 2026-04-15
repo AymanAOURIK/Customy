@@ -46,21 +46,42 @@
       });
   }
 
-  function daysSince(dateStr) {
+  function parseDateValue(dateStr) {
     if (!dateStr) return null;
-    var d = new Date(dateStr.replace(" ", "T") + (dateStr.includes("T") ? "" : "Z"));
+    var raw = String(dateStr).trim();
+    if (!raw) return null;
+
+    var normalized = raw;
+    if (/^\d{4}-\d{2}-\d{2} \d/.test(raw)) {
+      normalized = raw.replace(" ", "T") + "Z";
+    } else if (
+      /^\d{4}-\d{2}-\d{2}T/.test(raw) &&
+      !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw)
+    ) {
+      normalized = raw + "Z";
+    }
+
+    var parsed = new Date(normalized);
+    return Number.isFinite(parsed.getTime()) ? parsed : null;
+  }
+
+  function daysSince(dateStr) {
+    var d = parseDateValue(dateStr);
+    if (!d) return null;
     var diff = Date.now() - d.getTime();
+    if (!Number.isFinite(diff)) return null;
     return Math.max(0, Math.floor(diff / 86400000));
   }
 
   function formatDate(dateStr) {
     if (!dateStr) return "-";
-    var d = new Date(dateStr.replace(" ", "T") + (dateStr.includes("T") ? "" : "Z"));
+    var d = parseDateValue(dateStr);
+    if (!d) return "-";
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
   function formatScore(val) {
-    if (val === null || val === undefined) return "-";
+    if (window.CUtils) return CUtils.formatScore(val);
     var n = Number(val);
     return Number.isFinite(n) ? n.toFixed(1) : "-";
   }
