@@ -86,6 +86,58 @@
       lines.push("<span class=\"onboarding-note\">" + notes.join(" &middot; ") + "</span>");
     }
 
+    // ── Phase 2 intelligence ────────────────────────────────
+    var qr = data.profile_quality_report;
+    if (qr) {
+      var qrStatus = qr.overall_status || "review";
+      var qrStatusClass =
+        qrStatus === "ready" ? "intel-status-ready" :
+        qrStatus === "review" ? "intel-status-review" : "intel-status-blocked";
+      var qrLabel =
+        qrStatus === "ready" ? "Ready to generate" :
+        qrStatus === "review" ? "Needs review before generation" :
+        "Profile blocked \u2014 complete before generating";
+      lines.push(
+        "<span class=\"intel-status-badge " + qrStatusClass + "\">" + qrLabel + "</span>"
+      );
+
+      var qrBlockers = (qr.blockers || []).slice(0, 2);
+      if (qrBlockers.length) {
+        lines.push(
+          qrBlockers.map(function (b) {
+            return "<span class=\"onboarding-note\">\u2192 " + _esc(b.message || "") + "</span>";
+          }).join("<br>")
+        );
+      }
+    }
+
+    var scr = data.source_coverage_report;
+    if (scr && scr.lost_signals_count > 0) {
+      lines.push(
+        "<span class=\"onboarding-note\">" +
+        scr.lost_signals_count + " signal" +
+        (scr.lost_signals_count !== 1 ? "s" : "") +
+        " from your source resume not yet captured in your profile." +
+        "</span>"
+      );
+    }
+
+    var ep = data.profile_enrichment_plan;
+    if (ep && (ep.recommendations || []).length > 0) {
+      var topRecs = ep.recommendations
+        .filter(function (r) { return r.priority === "high"; })
+        .slice(0, 3);
+      if (!topRecs.length) topRecs = ep.recommendations.slice(0, 3);
+      if (topRecs.length) {
+        lines.push(
+          "<span class=\"onboarding-note\">Top enrichment: " +
+          topRecs.map(function (r) { return _esc(r.area || ""); }).join(" &middot; ") +
+          "</span>"
+        );
+      }
+    }
+    // ───────────────────────────────────────────────────────
+
     container.innerHTML = lines.join("<br>");
   }
 

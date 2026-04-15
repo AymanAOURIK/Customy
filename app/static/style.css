@@ -2240,6 +2240,147 @@ body.profile-gate #studio-generate-btn {
   font-size: 0.82rem;
 }
 
+/* ── Phase 2 intelligence: shared status badges ──────────── */
+
+.intel-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.intel-status-ready  { background: var(--color-success-bg, #d1fae5); color: var(--color-success, #065f46); }
+.intel-status-review { background: #fef3c7; color: #92400e; }
+.intel-status-blocked { background: #fee2e2; color: #991b1b; }
+
+/* ── Phase 2: Tailoring Studio — blocked panel ───────────── */
+
+.studio-blocked-panel { padding: 20px 20px 16px; }
+.studio-blocked-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.studio-blocked-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--shell-text-strong);
+}
+.studio-blocked-section-label {
+  font-size: 0.69rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--shell-text-soft);
+  margin: 12px 0 5px;
+}
+.studio-blocked-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 5px;
+}
+.studio-blocked-list li {
+  font-size: 0.82rem;
+  color: var(--shell-text);
+  line-height: 1.45;
+}
+.studio-blocked-cta { margin-top: 18px; }
+
+/* ── Phase 2: Tailoring Studio — fullness risk card ──────── */
+
+.studio-fullness-risk {
+  border-top: 1px solid var(--shell-border);
+  padding: 12px 16px 8px;
+  margin-top: 2px;
+}
+.studio-risk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.studio-risk-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+}
+.studio-risk-scores {
+  font-size: 0.78rem;
+  color: var(--shell-text-soft);
+}
+.studio-risk-issues {
+  margin: 4px 0 4px;
+  padding-left: 16px;
+  display: grid;
+  gap: 3px;
+}
+.studio-risk-issues li {
+  font-size: 0.78rem;
+  color: var(--shell-text-btn);
+  line-height: 1.4;
+}
+
+/* ── Phase 2: Profile editor — readiness banner ──────────── */
+
+.pe-readiness-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+.pe-readiness-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--shell-text-strong);
+}
+.pe-readiness-blockers {
+  margin: 0 16px 10px;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+.pe-readiness-blockers li {
+  font-size: 0.8rem;
+  color: var(--shell-text-btn);
+  line-height: 1.45;
+}
+.pe-readiness-enrichment {
+  padding: 0 16px 10px;
+}
+.pe-readiness-enrichment-label {
+  font-size: 0.69rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--shell-text-soft);
+  margin-bottom: 4px;
+}
+.pe-readiness-enrichment-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 3px;
+}
+.pe-readiness-enrichment-list li {
+  font-size: 0.8rem;
+  color: var(--shell-text-btn);
+  line-height: 1.4;
+}
+.pe-readiness-source-note {
+  padding: 0 16px 12px;
+  font-size: 0.78rem;
+  color: var(--shell-text-soft);
+  margin: 0;
+}
+
 /* ── Auth overlay ────────────────────────────────────────── */
 
 .auth-overlay {

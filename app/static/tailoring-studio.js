@@ -11,9 +11,19 @@
   var tabButtons = document.getElementById("studio-tab-buttons");
   var tabPanes = document.getElementById("studio-tab-panes");
   var emptyState = document.getElementById("studio-empty-state");
+  var blockedPanel = document.getElementById("studio-blocked-panel");
+  var fullnessRiskEl = document.getElementById("studio-fullness-risk");
 
   if (!jdInput || !generateBtn || !statusBanner || !downloadLinks || !tabButtons || !tabPanes) {
     return;
+  }
+
+  function _esc(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function setStatus(message, mode) {
@@ -241,6 +251,126 @@
     );
   }
 
+  /* ── Phase 2: profile readiness blocked state ───────────── */
+
+  function renderBlockedState(data) {
+    if (!blockedPanel) return;
+    var qr = data.profile_quality_report || {};
+    var ep = data.profile_enrichment_plan || {};
+    var blockers = (qr.blockers || []).slice(0, 3);
+    var recs = (ep.recommendations || [])
+      .filter(function (r) { return r.priority === "high"; })
+      .slice(0, 3);
+    if (!recs.length) recs = (ep.recommendations || []).slice(0, 3);
+
+    var html =
+      '<div class="studio-blocked-header">' +
+      '<span class="intel-status-badge intel-status-blocked">Blocked</span>' +
+      '<span class="studio-blocked-title">Profile needs attention before generation</span>' +
+      "</div>";
+
+    if (blockers.length) {
+      html +=
+        '<p class="studio-blocked-section-label">What to fix</p>' +
+        '<ul class="studio-blocked-list">';
+      blockers.forEach(function (b) {
+        html +=
+          "<li>" +
+          (b.field ? "<strong>" + _esc(b.field) + "</strong> \u2014 " : "") +
+          _esc(b.message || b.fix || "") +
+          "</li>";
+      });
+      html += "</ul>";
+    }
+
+    if (recs.length) {
+      html +=
+        '<p class="studio-blocked-section-label">Top enrichment actions</p>' +
+        '<ul class="studio-blocked-list">';
+      recs.forEach(function (r) {
+        html += "<li>" + _esc(r.recommendation || r.area || "") + "</li>";
+      });
+      html += "</ul>";
+    }
+
+    html +=
+      '<div class="studio-blocked-cta">' +
+      '<button type="button" class="btn-primary studio-blocked-go-profile">' +
+      "Go to My Profile" +
+      "</button>" +
+      "</div>";
+
+    blockedPanel.innerHTML = html;
+    blockedPanel.hidden = false;
+
+    var goBtn = blockedPanel.querySelector(".studio-blocked-go-profile");
+    if (goBtn) {
+      goBtn.addEventListener("click", function () {
+        if (window.CustomyDashboard && CustomyDashboard.navigateTo) {
+          CustomyDashboard.navigateTo("section-profile-editor");
+        }
+      });
+    }
+
+    // Collapse the output area while blocked
+    if (tabPanes) tabPanes.hidden = true;
+    if (tabButtons) tabButtons.hidden = true;
+    if (downloadLinks) downloadLinks.hidden = true;
+  }
+
+  function clearBlockedState() {
+    if (blockedPanel) {
+      blockedPanel.hidden = true;
+      blockedPanel.innerHTML = "";
+    }
+    if (tabPanes) tabPanes.removeAttribute("hidden");
+    if (tabButtons) tabButtons.removeAttribute("hidden");
+    if (downloadLinks) downloadLinks.removeAttribute("hidden");
+  }
+
+  /* ── Phase 2: resume fullness risk card ─────────────────── */
+
+  function renderFullnessRisk(risk) {
+    if (!fullnessRiskEl) return;
+    if (!risk) { fullnessRiskEl.hidden = true; return; }
+
+    var status = risk.overall_status || "clear";
+    var statusClass =
+      status === "clear" ? "intel-status-ready" :
+      status === "review" ? "intel-status-review" : "intel-status-blocked";
+    var statusLabel =
+      status === "clear" ? "Clear" :
+      status === "review" ? "Review" : "Elevated Risk";
+
+    var issues = (risk.blockers || []).slice(0, 2)
+      .concat((risk.warnings || []).slice(0, 3))
+      .slice(0, 3);
+
+    var html =
+      '<div class="studio-risk-header">' +
+      '<span class="studio-risk-title">' +
+      "<strong>Resume Fullness</strong>" +
+      '<span class="intel-status-badge ' + statusClass + '">' + statusLabel + "</span>" +
+      "</span>" +
+      '<span class="studio-risk-scores">' +
+      "Fill&nbsp;<strong>" + Math.round(risk.visual_fill_score || 0) + "</strong>%" +
+      "&nbsp;&middot;&nbsp;Substance&nbsp;<strong>" +
+      Math.round(risk.substance_score || 0) + "</strong>%" +
+      "</span>" +
+      "</div>";
+
+    if (issues.length) {
+      html += '<ul class="studio-risk-issues">';
+      issues.forEach(function (issue) {
+        html += "<li>" + _esc(issue.message || "") + "</li>";
+      });
+      html += "</ul>";
+    }
+
+    fullnessRiskEl.innerHTML = html;
+    fullnessRiskEl.hidden = false;
+  }
+
   function generate() {
     var jdText = jdInput.value.trim();
     if (!jdText) {
@@ -250,6 +380,7 @@
 
     generateBtn.disabled = true;
     setStatus("Generating tailored materials...", "loading");
+    clearBlockedState();
 
     CAuth.authFetch("/api/generate", {
       method: "POST",
@@ -261,9 +392,31 @@
       }),
     })
       .then(function (res) {
-        return res.json();
+        return res.json().then(function (body) {
+          return { status: res.status, body: body };
+        });
       })
-      .then(function (data) {
+      .then(function (result) {
+        var httpStatus = result.status;
+        var data = result.body;
+
+        // Profile readiness gate — blocked (422)
+        if (httpStatus === 422 && data.profile_readiness_gate) {
+          renderBlockedState(data);
+          setStatus("Profile needs attention before generation.", "error");
+          return;
+        }
+
+        // Score gate — below configured minimum
+        if (data.score_gate) {
+          setStatus(
+            "Score " + formatScore(data.score) + " below minimum (" +
+            formatScore(data.min_score) + "). Generation skipped.",
+            "error"
+          );
+          return;
+        }
+
         if (data.error) {
           throw new Error(data.error);
         }
@@ -271,6 +424,7 @@
         renderAnalysis(data);
         renderDownloads(data.files);
         renderTabs(data);
+        renderFullnessRisk(data.resume_fullness_risk);
         dispatchGenerationEvent(data);
 
         var costSuffix =

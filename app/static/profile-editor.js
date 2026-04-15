@@ -104,6 +104,82 @@
     });
   }
 
+  function _esc(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ── Phase 2: profile readiness banner ───────────────────── */
+
+  function _renderReadinessBanner(qualityReport, enrichmentPlan, sourceCoverage) {
+    var slot = _$("pe-readiness-slot");
+    if (!slot) return;
+    if (!qualityReport) { slot.hidden = true; return; }
+
+    var status = qualityReport.overall_status || "review";
+    var statusClass =
+      status === "ready" ? "intel-status-ready" :
+      status === "review" ? "intel-status-review" : "intel-status-blocked";
+    var statusLabel =
+      status === "ready" ? "Ready" :
+      status === "review" ? "Review" : "Blocked";
+
+    var blockers = (qualityReport.blockers || []).slice(0, 3);
+    var warnings = (qualityReport.warnings || []).slice(0, 2);
+    var issues = blockers.length ? blockers : warnings;
+
+    var recs = ((enrichmentPlan && enrichmentPlan.recommendations) || [])
+      .filter(function (r) { return r.priority === "high"; })
+      .slice(0, 3);
+    if (!recs.length) {
+      recs = ((enrichmentPlan && enrichmentPlan.recommendations) || []).slice(0, 3);
+    }
+
+    var html =
+      '<div class="pe-readiness-header">' +
+      '<span class="intel-status-badge ' + statusClass + '">' + statusLabel + "</span>" +
+      '<span class="pe-readiness-label">Profile Readiness</span>' +
+      "</div>";
+
+    if (issues.length) {
+      html += '<ul class="pe-readiness-blockers">';
+      issues.forEach(function (item) {
+        html +=
+          "<li>" +
+          (item.field ? "<strong>" + _esc(item.field) + "</strong> \u2014 " : "") +
+          _esc(item.message || item.fix || "") +
+          "</li>";
+      });
+      html += "</ul>";
+    }
+
+    if (recs.length) {
+      html +=
+        '<div class="pe-readiness-enrichment">' +
+        '<div class="pe-readiness-enrichment-label">Top enrichment targets</div>' +
+        '<ul class="pe-readiness-enrichment-list">';
+      recs.forEach(function (r) {
+        html += "<li>" + _esc(r.recommendation || r.area || "") + "</li>";
+      });
+      html += "</ul></div>";
+    }
+
+    if (sourceCoverage && sourceCoverage.lost_signals_count > 0) {
+      html +=
+        '<p class="pe-readiness-source-note">' +
+        sourceCoverage.lost_signals_count +
+        " signal" + (sourceCoverage.lost_signals_count !== 1 ? "s" : "") +
+        " from your source resume not yet captured in your profile." +
+        "</p>";
+    }
+
+    slot.innerHTML = html;
+    slot.hidden = false;
+  }
+
   function _setCreateMode(profile) {
     _mode = "create";
     var label = _$("profile-editor-mode-label");
@@ -148,6 +224,11 @@
         if (btn) btn.disabled = false;
         if (result.status === 200 || result.status === 201) {
           _setUpdateMode(result.body);
+          _renderReadinessBanner(
+            result.body.profile_quality_report,
+            result.body.profile_enrichment_plan,
+            result.body.source_coverage_report
+          );
           _setStatus("Saved.", "success");
           setTimeout(function () { _setStatus(""); }, 3000);
           if (result.status === 201) {
@@ -181,6 +262,11 @@
           } else {
             _setUpdateMode(payload.profile || {});
           }
+          _renderReadinessBanner(
+            payload.profile_quality_report,
+            payload.profile_enrichment_plan,
+            payload.source_coverage_report
+          );
         } else {
           var msg = (result.body && result.body.error) || "Failed to load profile.";
           _setStatus(msg, "error");

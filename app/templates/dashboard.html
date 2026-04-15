@@ -479,6 +479,9 @@
               </div>
 
               <div class="studio-preview-column">
+                <!-- Phase 2: profile readiness blocked state (shown by tailoring-studio.js) -->
+                <div id="studio-blocked-panel" class="shell-card studio-blocked-panel" hidden></div>
+
                 <div class="shell-card">
                   <div class="shell-card-header">
                     <div>
@@ -537,6 +540,8 @@
                       <strong id="studio-analysis-cost">-</strong>
                     </div>
                   </div>
+                  <!-- Phase 2: resume fullness risk (shown by tailoring-studio.js after generation) -->
+                  <div id="studio-fullness-risk" class="studio-fullness-risk" hidden></div>
                 </div>
 
                 <div class="shell-card">
@@ -858,6 +863,9 @@
                 <p>Manage your candidate data for SaaS resume generation</p>
               </div>
             </div>
+
+            <!-- Phase 2: profile readiness summary (shown by profile-editor.js in SaaS mode) -->
+            <div id="pe-readiness-slot" class="shell-card" hidden></div>
 
             <!-- Local mode notice — hidden in SaaS mode by profile-editor.js -->
             <div id="profile-editor-local-notice" class="shell-card">
