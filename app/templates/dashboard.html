@@ -156,73 +156,16 @@
             <!-- KPI / Funnel -->
             <div class="kpi-grid" id="kpi-grid"></div>
 
-            <!-- Hero: Profile + Target Roles + Resume -->
-            <div class="content-3col">
-              <div class="shell-card" id="overview-profile-slot">
-                <div class="shell-card-header">
-                  <div>
-                    <h3 class="shell-card-title">Profile Snapshot</h3>
-                    <p class="shell-card-subtitle">Candidate profile summary</p>
-                  </div>
-                </div>
-                <div class="placeholder-section placeholder--md">
-                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <p class="placeholder-text">Profile snapshot will appear here</p>
+            <!-- Activity Chart -->
+            <div class="shell-card chart-card shell-card--spaced">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Activity</h3>
+                  <p class="shell-card-subtitle">Last 30 days</p>
                 </div>
               </div>
-
-              <div class="shell-card" id="overview-target-roles-slot">
-                <div class="shell-card-header">
-                  <div>
-                    <h3 class="shell-card-title">Target Roles</h3>
-                    <p class="shell-card-subtitle">Roles you're pursuing</p>
-                  </div>
-                </div>
-                <div class="placeholder-section placeholder--md">
-                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                  <p class="placeholder-text">Target roles will appear here</p>
-                </div>
-              </div>
-
-              <div class="shell-card" id="overview-resume-slot">
-                <div class="shell-card-header">
-                  <div>
-                    <h3 class="shell-card-title">Original Resume</h3>
-                    <p class="shell-card-subtitle">Base resume on file</p>
-                  </div>
-                </div>
-                <div class="placeholder-section placeholder--md">
-                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <p class="placeholder-text">Resume details will appear here</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Activity Chart + Next Actions -->
-            <div class="content-main-side">
-              <div class="shell-card chart-card">
-                <div class="shell-card-header">
-                  <div>
-                    <h3 class="shell-card-title">Activity</h3>
-                    <p class="shell-card-subtitle">Last 30 days</p>
-                  </div>
-                </div>
-                <div id="chart-tooltip" class="shell-chart-tooltip"></div>
-                <svg id="activity-chart" viewBox="0 0 820 260" aria-label="Activity chart"></svg>
-              </div>
-
-              <div class="shell-card">
-                <div class="shell-card-header">
-                  <div>
-                    <h3 class="shell-card-title">Next Actions</h3>
-                    <p class="shell-card-subtitle">Recommended steps</p>
-                  </div>
-                </div>
-                <div class="placeholder-section placeholder--lg">
-                  <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                  <p class="placeholder-text">Action recommendations will appear here</p>
-                </div>
-              </div>
+              <div id="chart-tooltip" class="shell-chart-tooltip"></div>
+              <svg id="activity-chart" viewBox="0 0 820 260" aria-label="Activity chart"></svg>
             </div>
 
             <!-- Quick Stats -->
@@ -252,7 +195,7 @@
               <div class="shell-card-header">
                 <div>
                   <h3 class="shell-card-title">Applications</h3>
-                  <p class="shell-card-subtitle">History &middot; Duplicate rows are excluded from stats</p>
+                  <p class="shell-card-subtitle">History</p>
                 </div>
               </div>
               <div class="shell-table-wrap">
@@ -402,7 +345,7 @@
             <div class="page-header">
               <div>
                 <h1>Tailoring Studio</h1>
-                <p>Build tailored application packs inside the new platform workspace</p>
+                <p>Paste a job description to generate a tailored application pack</p>
               </div>
             </div>
 
@@ -413,7 +356,6 @@
                     <h3 class="shell-card-title">Job Brief</h3>
                     <p class="shell-card-subtitle">Paste the role description and choose which outputs to generate</p>
                   </div>
-                  <span class="studio-pill">Local-only flow</span>
                 </div>
 
                 <label class="studio-label" for="studio-jd-input">Job description</label>

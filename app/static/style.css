@@ -514,9 +514,11 @@ body.platform-body {
 .platform-main {
   margin-left: 252px;
   flex: 1;
+  min-width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 /* ── Top bar ────────────────────────────────────────────── */
@@ -1165,6 +1167,7 @@ body.platform-body {
   font-size: 0.85rem;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
   transition: background 120ms ease;
 }
 
