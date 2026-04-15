@@ -49,12 +49,14 @@
     sidebarOverlay.classList.remove("visible");
   });
 
-  // Activate section from URL hash on load
+  // Activate section from URL hash on load.
+  // Guard: skip hidden links so stale hashes for admin-only or hidden sections
+  // don't expose content that the current user should not see.
   if (window.location.hash) {
     var target = document.querySelector(
       '.sidebar-link[href="' + window.location.hash + '"]'
     );
-    if (target) navigateTo(target.dataset.section);
+    if (target && !target.hidden) navigateTo(target.dataset.section);
   }
 
   /* ── Dashboard data ─────────────────────────────────── */
