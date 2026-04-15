@@ -161,7 +161,20 @@ def _join_skill_items(items: list[str]) -> str:
     return " $\\cdot$ ".join(_escape(item) for item in items if str(item).strip())
 
 
-def _skill_columns(candidate: dict, tailored: ApplicationPack) -> tuple[str, str]:
+def _skill_column_widths(technical_items: list[str], soft_items: list[str]) -> tuple[str, str]:
+    technical_weight = sum(len(item) for item in technical_items) + (3 * len(technical_items))
+    soft_weight = sum(len(item) for item in soft_items) + (3 * len(soft_items))
+    total_weight = technical_weight + soft_weight
+    if total_weight <= 0:
+        left_width = 0.48
+    else:
+        left_width = technical_weight / total_weight
+        left_width = max(0.48, min(0.62, left_width))
+    right_width = 0.96 - left_width
+    return f"{left_width:.2f}\\textwidth", f"{right_width:.2f}\\textwidth"
+
+
+def _skill_columns(candidate: dict, tailored: ApplicationPack) -> tuple[str, str, str, str]:
     tailored_hard = []
     for field in ("languages", "frameworks", "tools"):
         tailored_hard.extend(list(tailored.tailored_skills.get(field, [])))
@@ -186,7 +199,8 @@ def _skill_columns(candidate: dict, tailored: ApplicationPack) -> tuple[str, str
         soft_items.append(cleaned)
         seen_soft.add(key)
 
-    return _join_skill_items(technical), _join_skill_items(soft_items)
+    left_width, right_width = _skill_column_widths(technical, soft_items)
+    return _join_skill_items(technical), _join_skill_items(soft_items), left_width, right_width
 
 
 def _education_period(item: dict) -> str:
@@ -229,7 +243,7 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
     education = candidate.get("education", [])
     spoken_languages = list(candidate.get("spoken_languages", []))
     resume_language = getattr(tailored, "resume_language", "en") or "en"
-    technical_col, soft_col = _skill_columns(candidate, tailored)
+    technical_col, soft_col, technical_width, soft_width = _skill_columns(candidate, tailored)
 
     job_blocks = []
     for item in tailored.tailored_experiences:
@@ -298,13 +312,13 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
             r"\raggedright #1\\#2 &",
             r"\textbf{#3} (#4)\\",
             r"& #5",
-            r"\end{tabularx}\vspace{0pt}",
+            r"\end{tabularx}\vspace{4pt}",
             r"}",
             r"\newcommand{\resedu}[3]{",
             r"\noindent\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}@{\hspace{0.03\textwidth}}X@{}}",
             r"\raggedright #1 & \textbf{#2}\\",
             r"& #3",
-            r"\end{tabularx}\vspace{0pt}",
+            r"\end{tabularx}\vspace{4pt}",
             r"}",
             "",
             r"\begin{document}",
@@ -324,9 +338,14 @@ def render_tex(candidate: dict, tailored: ApplicationPack, jd_analysis: dict | N
             *education_blocks,
             "",
             r"\resheading{Compétences}" if resume_language == "fr" else r"\resheading{Skills}",
-            r"\begin{tabularx}{\textwidth}{@{}X X@{}}",
+            rf"\begin{{tabular}}{{@{{}}p{{{technical_width}}}@{{\hspace{{0.04\textwidth}}}}p{{{soft_width}}}@{{}}}}",
+            (
+                r"\textbf{Compétences techniques} & \textbf{Compétences interpersonnelles} \\[2pt]"
+                if resume_language == "fr"
+                else r"\textbf{Technical Skills} & \textbf{Soft Skills} \\[2pt]"
+            ),
             f"{technical_col} & {soft_col} \\\\",
-            r"\end{tabularx}",
+            r"\end{tabular}",
             "",
             *language_section,
             "",
