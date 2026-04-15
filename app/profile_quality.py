@@ -235,7 +235,7 @@ def _apply_evidence_rules(
                 code="recent_roles_too_thin",
                 severity="blocker",
                 dimension="evidence_density",
-                message="The two most recent substantive roles do not contain enough bullet-level proof.",
+                message="The two most recent roles do not contain enough bullet-level proof.",
                 details={
                     "recent_two_roles_bullet_count": recent_two_roles_bullet_count,
                     "minimum_required": 4,
@@ -248,7 +248,7 @@ def _apply_evidence_rules(
                 code="recent_roles_need_more_depth",
                 severity="warning",
                 dimension="evidence_density",
-                message="The two most recent substantive roles look thin for a strong tailored resume.",
+                message="The two most recent roles look thin for a strong tailored resume.",
                 details={
                     "recent_two_roles_bullet_count": recent_two_roles_bullet_count,
                     "recommended_minimum": 7,
@@ -261,7 +261,7 @@ def _apply_evidence_rules(
                 code="no_recent_metric_proof",
                 severity="blocker",
                 dimension="evidence_density",
-                message="The two most recent substantive roles have no metric-bearing bullets.",
+                message="The two most recent roles have no bullet points with numbers or results.",
             )
         )
     elif recent_metric_bearing_bullets < 2:
@@ -270,7 +270,7 @@ def _apply_evidence_rules(
                 code="low_recent_metric_proof",
                 severity="warning",
                 dimension="evidence_density",
-                message="The two most recent substantive roles have limited quantified proof.",
+                message="The two most recent roles have limited numbers or measurable results.",
                 details={"recent_metric_bearing_bullets": recent_metric_bearing_bullets},
             )
         )
@@ -280,7 +280,7 @@ def _apply_evidence_rules(
                 code="no_recent_named_system_proof",
                 severity="blocker",
                 dimension="evidence_density",
-                message="The two most recent substantive roles do not name specific systems, tools, or platforms.",
+                message="The two most recent roles do not name specific systems, tools, or platforms.",
             )
         )
     elif recent_named_system_or_tool_bullets < 2:
@@ -289,7 +289,7 @@ def _apply_evidence_rules(
                 code="low_recent_named_system_proof",
                 severity="warning",
                 dimension="evidence_density",
-                message="The two most recent substantive roles contain limited named systems or tools.",
+                message="The two most recent roles contain limited named systems or tools.",
                 details={"recent_named_system_or_tool_bullets": recent_named_system_or_tool_bullets},
             )
         )
@@ -309,7 +309,7 @@ def _apply_evidence_rules(
                 code="low_metric_coverage",
                 severity="warning",
                 dimension="evidence_density",
-                message="The profile contains limited metric-bearing bullets overall.",
+                message="The profile contains limited bullet points with numbers or results overall.",
                 details={"metric_bearing_bullets": metric_bearing_bullets},
             )
         )
@@ -338,7 +338,7 @@ def _apply_keyword_rules(
                 code="empty_keyword_inventory",
                 severity="blocker",
                 dimension="keyword_richness",
-                message="The profile has no hard-skill inventory and no scoring keywords.",
+                message="The profile has no skills list and no scoring keywords.",
             )
         )
     if scoring_keyword_count == 0:
@@ -366,7 +366,7 @@ def _apply_keyword_rules(
                 code="thin_hard_skill_inventory",
                 severity="warning",
                 dimension="keyword_richness",
-                message="The hard-skill inventory is thin.",
+                message="The skills list is thin.",
                 details={"hard_skill_count": hard_skill_count, "recommended_minimum": 8},
             )
         )

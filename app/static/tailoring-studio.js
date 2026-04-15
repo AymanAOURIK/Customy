@@ -281,10 +281,10 @@
     var qr = data.profile_quality_report || {};
     var ep = data.profile_enrichment_plan || {};
     var blockers = (qr.blockers || []).slice(0, 3);
-    var recs = (ep.recommendations || [])
+    var recs = (ep.targets || [])
       .filter(function (r) { return r.priority === "high"; })
       .slice(0, 3);
-    if (!recs.length) recs = (ep.recommendations || []).slice(0, 3);
+    if (!recs.length) recs = (ep.targets || []).slice(0, 3);
 
     var html =
       '<div class="studio-blocked-header">' +
@@ -308,10 +308,10 @@
 
     if (recs.length) {
       html +=
-        '<p class="studio-blocked-section-label">Top enrichment actions</p>' +
+        '<p class="studio-blocked-section-label">Suggested improvements</p>' +
         '<ul class="studio-blocked-list">';
       recs.forEach(function (r) {
-        html += "<li>" + _esc(r.recommendation || r.area || "") + "</li>";
+        html += "<li>" + _esc(r.title || r.instruction || "") + "</li>";
       });
       html += "</ul>";
     }
@@ -450,7 +450,7 @@
         renderFullnessRisk(data.resume_fullness_risk);
         dispatchGenerationEvent(data);
         var savedLabel = [data.company, data.role].filter(Boolean).join(" - ");
-        setStatus("Saved for " + (savedLabel || "this application") + ".", "success");
+        setStatus("Saved for " + (savedLabel || "this application"), "success");
       })
       .catch(function (error) {
         setStatus(error.message || "Request failed.", "error");

@@ -131,11 +131,11 @@
     var warnings = (qualityReport.warnings || []).slice(0, 2);
     var issues = blockers.length ? blockers : warnings;
 
-    var recs = ((enrichmentPlan && enrichmentPlan.recommendations) || [])
+    var recs = ((enrichmentPlan && enrichmentPlan.targets) || [])
       .filter(function (r) { return r.priority === "high"; })
       .slice(0, 3);
     if (!recs.length) {
-      recs = ((enrichmentPlan && enrichmentPlan.recommendations) || []).slice(0, 3);
+      recs = ((enrichmentPlan && enrichmentPlan.targets) || []).slice(0, 3);
     }
 
     var html =
@@ -159,10 +159,10 @@
     if (recs.length) {
       html +=
         '<div class="pe-readiness-enrichment">' +
-        '<div class="pe-readiness-enrichment-label">Top enrichment targets</div>' +
+        '<div class="pe-readiness-enrichment-label">Suggested improvements</div>' +
         '<ul class="pe-readiness-enrichment-list">';
       recs.forEach(function (r) {
-        html += "<li>" + _esc(r.recommendation || r.area || "") + "</li>";
+        html += "<li>" + _esc(r.title || r.instruction || "") + "</li>";
       });
       html += "</ul></div>";
     }
@@ -171,7 +171,7 @@
       html +=
         '<p class="pe-readiness-source-note">' +
         sourceCoverage.lost_signals_count +
-        " signal" + (sourceCoverage.lost_signals_count !== 1 ? "s" : "") +
+        " detail" + (sourceCoverage.lost_signals_count !== 1 ? "s" : "") +
         " from your source resume not yet captured in your profile." +
         "</p>";
     }

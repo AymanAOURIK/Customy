@@ -344,7 +344,7 @@ def _build_recent_role_depth_target(
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_recent_role_depth_from_source"
         instruction = (
-            "Re-scan the source resume for omitted bullets in the two most recent substantive roles, "
+            "Re-scan the source resume for omitted bullets in the two most recent roles, "
             "then ask the user to confirm the recovered bullet-level proof."
         )
     else:
@@ -408,7 +408,7 @@ def _build_recent_metric_target(
         action_key = "collect_recent_role_metrics_from_user"
         instruction = (
             "Ask the user for concrete scale, throughput, savings, latency, team-size, or percentage-change "
-            "metrics for the two most recent substantive roles."
+            "numbers or measurable results for the two most recent roles."
         )
 
     return _target(
@@ -454,7 +454,7 @@ def _build_recent_named_system_target(
         classification = "recover_from_source_with_confirmation"
         action_key = "recover_recent_role_tools_from_profile_and_source"
         instruction = (
-            "Recover likely systems, tools, and platforms from the source resume or existing hard-skill inventory, "
+            "Recover likely systems, tools, and platforms from the source resume or existing skills list, "
             "then ask the user to confirm which ones belong in each recent role."
         )
     else:
@@ -462,7 +462,7 @@ def _build_recent_named_system_target(
         action_key = "collect_recent_role_tools_from_user"
         instruction = (
             "Ask the user which systems, tools, frameworks, platforms, or data stores were used in the "
-            "two most recent substantive roles."
+            "two most recent roles."
         )
 
     return _target(
@@ -511,7 +511,7 @@ def _build_scoring_keywords_target(
             classification = "auto_derive"
             action_key = "derive_scoring_keywords_from_profile_signals"
             instruction = (
-                "Derive a grounded scoring keyword list from the structured skill inventory, recent role titles, "
+                "Derive a grounded scoring keyword list from the structured skills list, recent role titles, "
                 "and technical evidence already present in the profile."
             )
         else:
@@ -524,7 +524,7 @@ def _build_scoring_keywords_target(
         classification = "auto_derive"
         action_key = "derive_scoring_keywords_from_profile_signals"
         instruction = (
-            "Derive a grounded scoring keyword list from the structured skill inventory, recent role titles, "
+            "Derive a grounded scoring keyword list from the structured skills list, recent role titles, "
             "and technical evidence already present in the profile."
         )
     elif signals["has_source_tech_terms"]:
@@ -574,14 +574,14 @@ def _build_hard_skill_inventory_target(
             classification = "recover_from_source_with_confirmation"
             action_key = "recover_hard_skill_inventory_from_source"
             instruction = (
-                "Recover hard-skill signals that are missing from the structured profile, "
+                "Recover skills list details that are missing from the structured profile, "
                 "then ask the user to confirm which tools and frameworks belong in the inventory."
             )
         elif signals["has_structured_keyword_signal"]:
             classification = "auto_derive"
             action_key = "derive_hard_skill_inventory_from_profile_signals"
             instruction = (
-                "Derive a fuller hard-skill inventory from named tools, technologies, and repeated technical signals "
+                "Derive a fuller skills list from named tools, technologies, and repeated technical details "
                 "already present in the structured profile."
             )
         else:
@@ -594,7 +594,7 @@ def _build_hard_skill_inventory_target(
         classification = "auto_derive"
         action_key = "derive_hard_skill_inventory_from_profile_signals"
         instruction = (
-            "Derive a fuller hard-skill inventory from named tools, technologies, and repeated technical signals "
+            "Derive a fuller skills list from named tools, technologies, and repeated technical details "
             "already present in the structured profile."
         )
     elif signals["has_source_tech_terms"]:
@@ -618,7 +618,7 @@ def _build_hard_skill_inventory_target(
         matched_issue_codes=matched,
         classification=classification,
         fields=("skills.languages", "skills.frameworks", "skills.tools"),
-        title="Strengthen the hard-skill inventory",
+        title="Strengthen the skills list",
         action_key=action_key,
         instruction=instruction,
         context={

@@ -80,8 +80,8 @@
     var missingMetrics = (gap.bullets_missing_metrics || []).length;
     var thinSkills     = gap.thin_skills;
     var notes = [];
-    if (missingMetrics > 0) notes.push(missingMetrics + " bullet" + (missingMetrics !== 1 ? "s" : "") + " could benefit from quantification");
-    if (thinSkills)         notes.push("skill inventory looks thin — you&rsquo;ll be asked to confirm and expand it");
+    if (missingMetrics > 0) notes.push(missingMetrics + " bullet point" + (missingMetrics !== 1 ? "s" : "") + " could be stronger with numbers or measurable results");
+    if (thinSkills)         notes.push("skills list looks thin — you&rsquo;ll be asked to confirm and expand it");
     if (notes.length > 0) {
       lines.push("<span class=\"onboarding-note\">" + notes.join(" &middot; ") + "</span>");
     }
@@ -115,7 +115,7 @@
     if (scr && scr.lost_signals_count > 0) {
       lines.push(
         "<span class=\"onboarding-note\">" +
-        scr.lost_signals_count + " signal" +
+        scr.lost_signals_count + " detail" +
         (scr.lost_signals_count !== 1 ? "s" : "") +
         " from your source resume not yet captured in your profile." +
         "</span>"
@@ -123,15 +123,17 @@
     }
 
     var ep = data.profile_enrichment_plan;
-    if (ep && (ep.recommendations || []).length > 0) {
-      var topRecs = ep.recommendations
+    if (ep && (ep.targets || []).length > 0) {
+      var topRecs = ep.targets
         .filter(function (r) { return r.priority === "high"; })
         .slice(0, 3);
-      if (!topRecs.length) topRecs = ep.recommendations.slice(0, 3);
+      if (!topRecs.length) topRecs = ep.targets.slice(0, 3);
       if (topRecs.length) {
         lines.push(
-          "<span class=\"onboarding-note\">Top enrichment: " +
-          topRecs.map(function (r) { return _esc(r.area || ""); }).join(" &middot; ") +
+          "<span class=\"onboarding-note\">Suggested improvements: " +
+          topRecs.map(function (target) {
+            return _esc(target.title || target.instruction || "");
+          }).join(" &middot; ") +
           "</span>"
         );
       }
