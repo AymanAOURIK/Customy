@@ -13,6 +13,8 @@
   var emptyState = document.getElementById("studio-empty-state");
   var blockedPanel = document.getElementById("studio-blocked-panel");
   var fullnessRiskEl = document.getElementById("studio-fullness-risk");
+  var adminMetricCards = document.querySelectorAll(".studio-metric-card--admin");
+  var isSaas = !!(window.CUSTOMY_CONFIG && window.CUSTOMY_CONFIG.mode === "saas");
 
   if (!jdInput || !generateBtn || !statusBanner || !downloadLinks || !tabButtons || !tabPanes) {
     return;
@@ -48,6 +50,25 @@
   var formatNumber = CUtils.formatNumber;
   var formatUsd = CUtils.formatUsd;
   var formatScore = CUtils.formatScore;
+
+  function isAdminView() {
+    return !isSaas || !!window.CUSTOMY_IS_ADMIN;
+  }
+
+  function syncAdminMetricVisibility() {
+    var adminView = isAdminView();
+    adminMetricCards.forEach(function (card) {
+      card.hidden = !adminView;
+    });
+  }
+
+  function resetAdminMetrics() {
+    document.getElementById("studio-analysis-model").textContent = "-";
+    document.getElementById("studio-analysis-prompt-tokens").textContent = "-";
+    document.getElementById("studio-analysis-output-tokens").textContent = "-";
+    document.getElementById("studio-analysis-cached-tokens").textContent = "-";
+    document.getElementById("studio-analysis-cost").textContent = "-";
+  }
 
   function resumePreview(pack) {
     var isFrench = (pack.resume_language || "").toLowerCase() === "fr";
@@ -188,7 +209,10 @@
       var file = entry[1];
       if (!file || !file.url) return;
 
-      var filename = (file.path || file.url || "").split(/[\\/]/).pop();
+      var filename = (file.filename || file.path || file.url || "")
+        .split("?")[0]
+        .split(/[\\/]/)
+        .pop();
       var link = document.createElement("a");
       link.className = "studio-download-link";
       link.href = file.url;
@@ -233,16 +257,15 @@
       formatScore(data.initial_score);
     document.getElementById("studio-analysis-updated-score").textContent =
       formatScore(data.updated_score);
-    document.getElementById("studio-analysis-model").textContent =
-      usage.model_used || "-";
-    document.getElementById("studio-analysis-prompt-tokens").textContent =
-      formatNumber(usage.prompt_tokens);
-    document.getElementById("studio-analysis-output-tokens").textContent =
-      formatNumber(usage.completion_tokens);
-    document.getElementById("studio-analysis-cached-tokens").textContent =
-      formatNumber(usage.cached_prompt_tokens);
-    document.getElementById("studio-analysis-cost").textContent =
-      formatUsd(usage.total_cost_usd);
+    if (!isAdminView()) {
+      resetAdminMetrics();
+      return;
+    }
+    document.getElementById("studio-analysis-model").textContent = usage.model_used || "-";
+    document.getElementById("studio-analysis-prompt-tokens").textContent = formatNumber(usage.prompt_tokens);
+    document.getElementById("studio-analysis-output-tokens").textContent = formatNumber(usage.completion_tokens);
+    document.getElementById("studio-analysis-cached-tokens").textContent = formatNumber(usage.cached_prompt_tokens);
+    document.getElementById("studio-analysis-cost").textContent = formatUsd(usage.total_cost_usd);
   }
 
   function dispatchGenerationEvent(data) {
@@ -426,12 +449,8 @@
         renderTabs(data);
         renderFullnessRisk(data.resume_fullness_risk);
         dispatchGenerationEvent(data);
-
-        var costSuffix =
-          data.usage && Number.isFinite(Number(data.usage.total_cost_usd))
-            ? " OpenAI cost " + formatUsd(data.usage.total_cost_usd) + "."
-            : "";
-        setStatus("Saved under " + data.slug + "." + costSuffix, "success");
+        var savedLabel = [data.company, data.role].filter(Boolean).join(" - ");
+        setStatus("Saved for " + (savedLabel || "this application") + ".", "success");
       })
       .catch(function (error) {
         setStatus(error.message || "Request failed.", "error");
@@ -442,5 +461,13 @@
   }
 
   clearPreview();
+  syncAdminMetricVisibility();
+  resetAdminMetrics();
+  window.addEventListener("customy:user-role-changed", function () {
+    syncAdminMetricVisibility();
+    if (!isAdminView()) {
+      resetAdminMetrics();
+    }
+  });
   generateBtn.addEventListener("click", generate);
 })();

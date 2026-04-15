@@ -33,7 +33,7 @@ from app.profile import build_candidate_context
 from app.storage import set_applications_dir
 from app.storage_cloud import get_signed_url_for_path
 from app.onboarding_db import get_onboarding_draft as get_onboarding_draft_db
-from app.auth import AuthError, require_auth
+from app.auth import AuthError, is_admin, require_auth
 from app.profile_db import get_profile, profile_to_candidate_context
 from app.profile_readiness import evaluate_saved_profile_readiness
 from app.db_postgres import (
@@ -75,9 +75,89 @@ ALLOWED_OUTPUTS = {"resume", "cover_letter", "linkedin_msg", "email_draft"}
 
 _log = logging.getLogger(__name__)
 
+_ADMIN_ONLY_APPLICATION_FIELDS = (
+    "model_used",
+    "tokens_used",
+    "prompt_tokens",
+    "cached_prompt_tokens",
+    "completion_tokens",
+    "total_cost_usd",
+    "api_attempts",
+)
+
+_ADMIN_ONLY_QUICK_STATS_FIELDS = (
+    "openai_request_count",
+    "openai_failed_request_count",
+    "openai_prompt_tokens",
+    "openai_cached_prompt_tokens",
+    "openai_completion_tokens",
+    "openai_total_tokens",
+    "openai_total_cost_usd",
+    "openai_average_cost_usd",
+)
+
 
 def _artifact_url(slug: str, filename: str) -> str:
     return f"/artifacts/{slug}/{filename}"
+
+
+def _viewer_can_see_admin_fields(cfg: dict, user_id: str | None = None) -> bool:
+    if cfg.get("mode") != "saas":
+        return True
+    return bool(user_id) and is_admin(user_id)
+
+
+def _sanitize_quick_stats(
+    quick_stats: dict | None,
+    *,
+    include_admin_fields: bool,
+) -> dict:
+    payload = dict(quick_stats or {})
+    if include_admin_fields:
+        return payload
+    for key in _ADMIN_ONLY_QUICK_STATS_FIELDS:
+        payload.pop(key, None)
+    return payload
+
+
+def _artifact_ref(path: object, url: object, *, include_internal_fields: bool) -> dict:
+    path_str = str(path or "").strip()
+    payload = {
+        "url": url,
+        "filename": Path(path_str).name if path_str else "",
+    }
+    if include_internal_fields:
+        payload["path"] = path_str
+    return payload
+
+
+def _sanitize_resume_fullness_risk(
+    risk: dict | None,
+    *,
+    include_internal_fields: bool,
+) -> dict | None:
+    if not isinstance(risk, dict):
+        return risk
+    payload = dict(risk)
+    if include_internal_fields:
+        return payload
+    payload.pop("report_version", None)
+    payload.pop("counters", None)
+    for key in ("blockers", "warnings"):
+        issues = payload.get(key)
+        if not isinstance(issues, list):
+            continue
+        sanitized: list[dict] = []
+        for issue in issues:
+            if not isinstance(issue, dict):
+                sanitized.append(issue)
+                continue
+            issue_payload = dict(issue)
+            issue_payload.pop("code", None)
+            issue_payload.pop("details", None)
+            sanitized.append(issue_payload)
+        payload[key] = sanitized
+    return payload
 
 
 def _normalize_application_url(value: object) -> str | None:
@@ -129,7 +209,13 @@ def _open_folder_in_file_manager(path: str, applications_dir: Path) -> None:
         raise ValueError(f"Could not open the application folder: {exc}") from exc
 
 
-def _serialize_files(slug: str, files: dict, cloud_paths: dict | None = None) -> dict:
+def _serialize_files(
+    slug: str,
+    files: dict,
+    cloud_paths: dict | None = None,
+    *,
+    include_internal_fields: bool = True,
+) -> dict:
     if cloud_paths:
         cloud_key_map = {
             "resume_tex": "resume_tex_url",
@@ -139,22 +225,33 @@ def _serialize_files(slug: str, files: dict, cloud_paths: dict | None = None) ->
             "email_draft": "email_draft_url",
             "generated_json": "generated_json_url",
         }
-        response = {"output_dir": {"path": None, "url": None}}
+        response = {"output_dir": _artifact_ref(None, None, include_internal_fields=include_internal_fields)}
         for key, path in files.items():
             if key in {"output_dir", "cover_letter_filename"}:
                 continue
             stored_path = cloud_paths.get(cloud_key_map.get(key, ""))
-            response[key] = {
-                "path": stored_path,
-                "url": get_signed_url_for_path(stored_path) if stored_path else None,
-            }
+            response[key] = _artifact_ref(
+                stored_path,
+                get_signed_url_for_path(stored_path) if stored_path else None,
+                include_internal_fields=include_internal_fields,
+            )
         return response
 
-    response = {"output_dir": {"path": files["output_dir"], "url": None}}
+    response = {
+        "output_dir": _artifact_ref(
+            files["output_dir"],
+            None,
+            include_internal_fields=include_internal_fields,
+        )
+    }
     for key, path in files.items():
         if key in {"output_dir", "cover_letter_filename"}:
             continue
-        response[key] = {"path": path, "url": _artifact_url(slug, Path(path).name)}
+        response[key] = _artifact_ref(
+            path,
+            _artifact_url(slug, Path(path).name),
+            include_internal_fields=include_internal_fields,
+        )
     return response
 
 
@@ -174,21 +271,26 @@ def _derived_generated_json_storage_path(row: dict) -> str | None:
     return f"{user_id}/{slug}/generated.json"
 
 
-def _serialize_application_files(row: dict, *, cloud_mode: bool = False) -> dict:
+def _serialize_application_files(
+    row: dict,
+    *,
+    cloud_mode: bool = False,
+    include_internal_fields: bool = True,
+) -> dict:
     files: list[dict[str, str]] = []
     missing: list[dict[str, str]] = []
 
     def add_file(key: str, label: str, path: object, url: str) -> None:
         path_str = str(path or "").strip()
-        files.append(
-            {
-                "key": key,
-                "label": label,
-                "path": path_str,
-                "filename": Path(path_str).name if path_str else "",
-                "url": url,
-            }
-        )
+        payload = {
+            "key": key,
+            "label": label,
+            "filename": Path(path_str).name if path_str else "",
+            "url": url,
+        }
+        if include_internal_fields:
+            payload["path"] = path_str
+        files.append(payload)
 
     def add_missing(key: str, label: str, reason: str) -> None:
         missing.append({"key": key, "label": label, "reason": reason})
@@ -285,7 +387,13 @@ def _serialize_application_files(row: dict, *, cloud_mode: bool = False) -> dict
     return {"files": files, "missing": missing}
 
 
-def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
+def _serialize_application(
+    row: dict,
+    *,
+    cloud_mode: bool = False,
+    include_admin_fields: bool = True,
+    include_internal_fields: bool = True,
+) -> dict:
     slug = row.get("slug", "")
     initial_score = row.get("initial_score")
     if initial_score is None:
@@ -319,7 +427,7 @@ def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
             outputs["email_draft"] = _artifact_url(slug, "email_draft.md")
         outputs["generated_json"] = _artifact_url(slug, "generated.json")
 
-    return {
+    payload = {
         "id": row.get("id"),
         "created_at": row.get("created_at"),
         "company": row.get("company"),
@@ -329,22 +437,20 @@ def _serialize_application(row: dict, *, cloud_mode: bool = False) -> dict:
         "updated_score": updated_score,
         "status": row.get("status"),
         "is_duplicate": bool(row.get("is_duplicate")),
-        "slug": slug,
-        "model_used": row.get("model_used"),
-        "tokens_used": row.get("tokens_used"),
-        "prompt_tokens": row.get("prompt_tokens"),
-        "cached_prompt_tokens": row.get("cached_prompt_tokens"),
-        "completion_tokens": row.get("completion_tokens"),
-        "total_cost_usd": row.get("total_cost_usd"),
-        "api_attempts": row.get("api_attempts"),
         "outputs": outputs,
         "job_application_url": row.get("job_application_url"),
         "notes": row.get("notes") or "",
-        "folder_path": None if cloud_mode else row.get("outputs_path"),
-        "folder_url": None if cloud_mode else (
-            f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None
-        ),
     }
+    if include_internal_fields:
+        payload["slug"] = slug
+        payload["folder_path"] = None if cloud_mode else row.get("outputs_path")
+        payload["folder_url"] = None if cloud_mode else (
+            f"/api/applications/{row.get('id')}/open-folder" if row.get("id") and row.get("outputs_path") else None
+        )
+    if include_admin_fields:
+        for key in _ADMIN_ONLY_APPLICATION_FIELDS:
+            payload[key] = row.get(key)
+    return payload
 
 
 def _normalize_bool(value: object, field_name: str) -> bool:
@@ -573,6 +679,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         db_path=db_path,
                         applications_dir=applications_dir,
                     )
+                    admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 except ScoreGateBlocked as exc:
                     self._json(
                         HTTPStatus.OK,
@@ -591,34 +698,41 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     )
                     return
 
-                self._json(
-                    HTTPStatus.OK,
-                    {
-                        "slug": result.slug,
-                        "app_id": result.app_id,
-                        "company": result.company,
-                        "role": result.role,
-                        "application_url": application_url,
-                        "score": result.updated_analysis.get("score"),
-                        "initial_score": result.initial_analysis.get("score"),
-                        "updated_score": result.updated_analysis.get("score"),
-                        "archetype": result.initial_analysis.get("archetype"),
-                        "ats_vendor": result.initial_analysis.get("ats_vendor"),
-                        "exact_phrases": result.initial_analysis.get("exact_phrases", []),
-                        "tokens_used": result.tokens_used,
-                        "usage": result.usage_summary,
-                        "analysis": result.initial_analysis,
-                        "initial_analysis": result.initial_analysis,
-                        "updated_analysis": result.updated_analysis,
-                        "resume_fullness_risk": result.resume_fullness_risk,
-                        "pack": result.pack.model_dump(),
-                        "files": _serialize_files(
-                            result.slug,
-                            result.files,
-                            cloud_paths=result.cloud_paths if cfg["mode"] == "saas" else None,
-                        ),
-                    },
-                )
+                response = {
+                    "company": result.company,
+                    "role": result.role,
+                    "application_url": application_url,
+                    "score": result.updated_analysis.get("score"),
+                    "initial_score": result.initial_analysis.get("score"),
+                    "updated_score": result.updated_analysis.get("score"),
+                    "archetype": result.initial_analysis.get("archetype"),
+                    "ats_vendor": result.initial_analysis.get("ats_vendor"),
+                    "exact_phrases": result.initial_analysis.get("exact_phrases", []),
+                    "analysis": result.initial_analysis,
+                    "initial_analysis": result.initial_analysis,
+                    "updated_analysis": result.updated_analysis,
+                    "resume_fullness_risk": _sanitize_resume_fullness_risk(
+                        result.resume_fullness_risk,
+                        include_internal_fields=admin_view,
+                    ),
+                    "pack": result.pack.model_dump(),
+                    "files": _serialize_files(
+                        result.slug,
+                        result.files,
+                        cloud_paths=result.cloud_paths if cfg["mode"] == "saas" else None,
+                        include_internal_fields=admin_view,
+                    ),
+                }
+                if admin_view:
+                    response.update(
+                        {
+                            "slug": result.slug,
+                            "app_id": result.app_id,
+                            "tokens_used": result.tokens_used,
+                            "usage": result.usage_summary,
+                        }
+                    )
+                self._json(HTTPStatus.OK, response)
             except ValueError as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
@@ -639,10 +753,21 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         user_id = self._require_saas_user_id()
                         if user_id is None:
                             return
+                        admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                         pg_set_duplicate_flag(user_id, app_id, is_duplicate, detail)
                         pg_refresh_daily_stats(user_id)
                         row = pg_get_application(user_id, app_id)
-                        self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                        self._json(
+                            HTTPStatus.OK,
+                            {
+                                "application": _serialize_application(
+                                    row,
+                                    cloud_mode=True,
+                                    include_admin_fields=admin_view,
+                                    include_internal_fields=admin_view,
+                                )
+                            },
+                        )
                     else:
                         set_duplicate_flag(db_path, app_id, is_duplicate, detail)
                         refresh_daily_stats(db_path)
@@ -665,9 +790,20 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                         user_id = self._require_saas_user_id()
                         if user_id is None:
                             return
+                        admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                         pg_update_application_notes(user_id, app_id, notes)
                         row = pg_get_application(user_id, app_id)
-                        self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                        self._json(
+                            HTTPStatus.OK,
+                            {
+                                "application": _serialize_application(
+                                    row,
+                                    cloud_mode=True,
+                                    include_admin_fields=admin_view,
+                                    include_internal_fields=admin_view,
+                                )
+                            },
+                        )
                     else:
                         update_application_notes(db_path, app_id, notes)
                         row = get_application(db_path, app_id)
@@ -692,10 +828,21 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                     user_id = self._require_saas_user_id()
                     if user_id is None:
                         return
+                    admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                     pg_update_status(user_id, app_id, new_status, detail)
                     pg_refresh_daily_stats(user_id)
                     row = pg_get_application(user_id, app_id)
-                    self._json(HTTPStatus.OK, {"application": _serialize_application(row, cloud_mode=True)})
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "application": _serialize_application(
+                                row,
+                                cloud_mode=True,
+                                include_admin_fields=admin_view,
+                                include_internal_fields=admin_view,
+                            )
+                        },
+                    )
                 else:
                     update_status(db_path, app_id, new_status, detail)
                     refresh_daily_stats(db_path)
@@ -753,16 +900,23 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             from urllib.parse import parse_qs
             params = parse_qs(query_string or "")
             min_score = float((params.get("min_score") or ["0"])[0])
+            admin_view = True
             if cfg["mode"] == "saas":
                 user_id = self._require_saas_user_id()
                 if user_id is None:
                     return
+                admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 rows = pg_get_apply_queue(user_id, min_score=min_score)
             else:
                 rows = get_apply_queue(db_path, min_score=min_score)
             apps = []
             for row in rows:
-                serialized = _serialize_application(row, cloud_mode=cfg["mode"] == "saas")
+                serialized = _serialize_application(
+                    row,
+                    cloud_mode=cfg["mode"] == "saas",
+                    include_admin_fields=admin_view,
+                    include_internal_fields=admin_view,
+                )
                 serialized["archetype"] = row.get("role_archetype") or "general"
                 apps.append(serialized)
             self._json(HTTPStatus.OK, {"applications": apps, "count": len(apps)})
@@ -777,10 +931,12 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             self._json(HTTPStatus.OK, get_analytics(db_path))
 
         def _handle_tracker(self) -> None:
+            admin_view = True
             if cfg["mode"] == "saas":
                 user_id = self._require_saas_user_id()
                 if user_id is None:
                     return
+                admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 rows = pg_get_tracker_applications(user_id)
             else:
                 rows = get_tracker_applications(db_path)
@@ -789,7 +945,12 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 {
                     "items": [
                         {
-                            **_serialize_application(row, cloud_mode=cfg["mode"] == "saas"),
+                            **_serialize_application(
+                                row,
+                                cloud_mode=cfg["mode"] == "saas",
+                                include_admin_fields=admin_view,
+                                include_internal_fields=admin_view,
+                            ),
                             "last_status_at": row.get("last_status_at"),
                         }
                         for row in rows
@@ -798,29 +959,34 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             )
 
         def _handle_application_files(self, app_id: int) -> None:
+            admin_view = True
             if cfg["mode"] == "saas":
                 user_id = self._require_saas_user_id()
                 if user_id is None:
                     return
+                admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 row = pg_get_application(user_id, app_id)
             else:
                 row = get_application(db_path, app_id)
             if not row:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Application not found."})
                 return
-            self._json(
-                HTTPStatus.OK,
-                {
-                    "application_id": app_id,
-                    "application": {
-                        "id": row.get("id"),
-                        "company": row.get("company"),
-                        "role": row.get("role"),
-                        "slug": row.get("slug"),
-                    },
-                    **_serialize_application_files(row, cloud_mode=cfg["mode"] == "saas"),
+            payload = {
+                "application": {
+                    "company": row.get("company"),
+                    "role": row.get("role"),
                 },
-            )
+                **_serialize_application_files(
+                    row,
+                    cloud_mode=cfg["mode"] == "saas",
+                    include_internal_fields=admin_view,
+                ),
+            }
+            if admin_view:
+                payload["application_id"] = app_id
+                payload["application"]["id"] = row.get("id")
+                payload["application"]["slug"] = row.get("slug")
+            self._json(HTTPStatus.OK, payload)
 
         def _handle_application_events(self, app_id: int) -> None:
             if cfg["mode"] == "saas":
@@ -838,10 +1004,12 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             self._json(HTTPStatus.OK, {"application_id": app_id, "events": events})
 
         def _handle_stats(self) -> None:
+            admin_view = True
             if cfg["mode"] == "saas":
                 user_id = self._require_saas_user_id()
                 if user_id is None:
                     return
+                admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 pg_refresh_daily_stats(user_id)
                 funnel = pg_get_funnel_stats(user_id)
                 daily_stats = pg_get_daily_stats(user_id, days=30)
@@ -856,7 +1024,10 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 {
                     "funnel": funnel,
                     "daily_stats": daily_stats,
-                    "quick_stats": quick_stats,
+                    "quick_stats": _sanitize_quick_stats(
+                        quick_stats,
+                        include_admin_fields=admin_view,
+                    ),
                 },
             )
 
@@ -865,17 +1036,27 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             limit = int(params.get("limit", ["50"])[0])
             offset = int(params.get("offset", ["0"])[0])
             status = params.get("status", [""])[0] or None
+            admin_view = True
             if cfg["mode"] == "saas":
                 user_id = self._require_saas_user_id()
                 if user_id is None:
                     return
+                admin_view = _viewer_can_see_admin_fields(cfg, user_id)
                 items = pg_list_applications(user_id, status_filter=status, limit=limit, offset=offset)
             else:
                 items = list_applications(db_path, status_filter=status, limit=limit, offset=offset)
             self._json(
                 HTTPStatus.OK,
                 {
-                    "items": [_serialize_application(item, cloud_mode=cfg["mode"] == "saas") for item in items],
+                    "items": [
+                        _serialize_application(
+                            item,
+                            cloud_mode=cfg["mode"] == "saas",
+                            include_admin_fields=admin_view,
+                            include_internal_fields=admin_view,
+                        )
+                        for item in items
+                    ],
                     "limit": limit,
                     "offset": offset,
                     "status": status,

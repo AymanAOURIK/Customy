@@ -64,9 +64,7 @@
       titleEl.textContent = (app.company || "Application") + " - " + (app.role || "Files");
     }
     if (subtitleEl) {
-      subtitleEl.textContent = (app.slug || "").trim()
-        ? "Pack " + app.slug
-        : "Generated artifacts";
+      subtitleEl.textContent = "Generated artifacts";
     }
 
     if (!files.length && !missing.length) {

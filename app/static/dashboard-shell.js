@@ -62,6 +62,8 @@
   var kpiGrid = document.getElementById("kpi-grid");
   var quickStats = document.getElementById("quick-stats");
   var costStats = document.getElementById("cost-stats");
+  var costStatsCard = document.getElementById("dashboard-cost-stats-card");
+  var applicationsCostHeader = document.getElementById("applications-cost-header");
   var applicationsBody = document.getElementById("applications-body");
   var chart = document.getElementById("activity-chart");
   var tooltip = document.getElementById("chart-tooltip");
@@ -90,6 +92,20 @@
 
   var formatUsd = CUtils.formatUsd;
   var formatScore = CUtils.formatScore;
+
+  function isAdminView() {
+    return !isSaas || !!window.CUSTOMY_IS_ADMIN;
+  }
+
+  function syncAdminVisibility() {
+    var adminView = isAdminView();
+    if (costStatsCard) {
+      costStatsCard.hidden = !adminView;
+    }
+    if (applicationsCostHeader) {
+      applicationsCostHeader.hidden = !adminView;
+    }
+  }
 
   function scoreBadge(score) {
     if (score === null || score === undefined || score === "")
@@ -177,6 +193,14 @@
         "</div>";
       quickStats.appendChild(el);
     });
+
+    if (!isAdminView()) {
+      if (costStats) {
+        costStats.innerHTML = "";
+      }
+      syncAdminVisibility();
+      return;
+    }
 
     var costItems = [
       ["Total API Cost", formatUsd(stats.openai_total_cost_usd)],
@@ -294,6 +318,7 @@
   }
 
   function renderApplications(items) {
+    var adminView = isAdminView();
     applicationsBody.innerHTML = "";
     items.forEach(function (item) {
       var row = document.createElement("tr");
@@ -397,9 +422,11 @@
         "<td>" +
         scoreBadge(item.updated_score) +
         "</td>" +
-        "<td>" +
-        (item.total_cost_usd != null ? formatUsd(item.total_cost_usd) : "-") +
-        "</td>";
+        (adminView
+          ? "<td>" +
+            (item.total_cost_usd != null ? formatUsd(item.total_cost_usd) : "-") +
+            "</td>"
+          : "");
 
       var statusCell = document.createElement("td");
       statusCell.appendChild(select);
@@ -553,9 +580,14 @@
     refresh: loadDashboard,
   };
 
+  window.addEventListener("customy:user-role-changed", function () {
+    syncAdminVisibility();
+  });
+
   window.addEventListener("customy:application-generated", function () {
     loadDashboard();
   });
 
+  syncAdminVisibility();
   loadDashboard();
 })();

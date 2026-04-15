@@ -246,7 +246,7 @@
             </div>
 
             <!-- Cost Tracker -->
-            <div class="shell-card shell-card--spaced">
+            <div class="shell-card shell-card--spaced" id="dashboard-cost-stats-card">
               <div class="shell-card-header">
                 <div>
                   <h3 class="shell-card-title">Cost Tracker</h3>
@@ -273,7 +273,7 @@
                       <th>Role</th>
                       <th>Initial</th>
                       <th>Updated</th>
-                      <th>Cost</th>
+                      <th id="applications-cost-header">Cost</th>
                       <th>Status</th>
                       <th>Job URL</th>
                       <th>Outputs</th>
@@ -486,7 +486,7 @@
                   <div class="shell-card-header">
                     <div>
                       <h3 class="shell-card-title">Generation Snapshot</h3>
-                      <p class="shell-card-subtitle">Analysis, scores, and model usage for the current run</p>
+                      <p class="shell-card-subtitle">Analysis and scores for the current run</p>
                     </div>
                   </div>
 
@@ -519,23 +519,23 @@
                       <span class="studio-metric-label">Updated Score</span>
                       <strong id="studio-analysis-updated-score">-</strong>
                     </div>
-                    <div class="studio-metric-card">
+                    <div class="studio-metric-card studio-metric-card--admin">
                       <span class="studio-metric-label">Model</span>
                       <strong id="studio-analysis-model">-</strong>
                     </div>
-                    <div class="studio-metric-card">
+                    <div class="studio-metric-card studio-metric-card--admin">
                       <span class="studio-metric-label">Prompt Tokens</span>
                       <strong id="studio-analysis-prompt-tokens">-</strong>
                     </div>
-                    <div class="studio-metric-card">
+                    <div class="studio-metric-card studio-metric-card--admin">
                       <span class="studio-metric-label">Output Tokens</span>
                       <strong id="studio-analysis-output-tokens">-</strong>
                     </div>
-                    <div class="studio-metric-card">
+                    <div class="studio-metric-card studio-metric-card--admin">
                       <span class="studio-metric-label">Cached Tokens</span>
                       <strong id="studio-analysis-cached-tokens">-</strong>
                     </div>
-                    <div class="studio-metric-card">
+                    <div class="studio-metric-card studio-metric-card--admin">
                       <span class="studio-metric-label">OpenAI Cost</span>
                       <strong id="studio-analysis-cost">-</strong>
                     </div>
@@ -1407,6 +1407,7 @@
       /* Auth bootstrap — runs after all deferred scripts have loaded */
       window.addEventListener("load", function () {
         var cfg = window.CUSTOMY_CONFIG || { mode: "local" };
+        window.CUSTOMY_IS_ADMIN = cfg.mode !== "saas";
 
         /* ── Local mode: init profile editor with local notice ── */
         if (cfg.mode !== "saas") {
@@ -1420,6 +1421,15 @@
         /* Remove the fail-closed loading gate and make the shell visible. */
         function _revealShell() {
           document.documentElement.removeAttribute("data-saas-loading");
+        }
+
+        function _setAdminViewerState(isAdmin) {
+          window.CUSTOMY_IS_ADMIN = !!isAdmin;
+          window.dispatchEvent(
+            new CustomEvent("customy:user-role-changed", {
+              detail: { isAdmin: !!isAdmin },
+            })
+          );
         }
 
         /* Wipe visible data so a signed-out session shows a clean slate. */
@@ -1507,11 +1517,13 @@
                   var loginError = document.getElementById("auth-login-error");
                   if (loginError) loginError.textContent = result.me.error || "Access not granted. Contact administrator.";
                   if (window.CAuthUI) CAuthUI.show();
+                  _setAdminViewerState(false);
                   CAuth.signOut();
                   return;
                 }
                 /* Allowed — hide overlay, populate topbar, boot modules. */
                 var me = result.me;
+                _setAdminViewerState(me.is_admin);
                 if (window.CAuthUI) CAuthUI.hide();
                 var email  = (session.user && session.user.email) || "";
                 var handle = email.split("@")[0] || email;
@@ -1538,6 +1550,7 @@
               .catch(function () {
                 /* Network error — fail open: reveal shell and continue normally. */
                 _revealShell();
+                _setAdminViewerState(false);
                 if (window.CAuthUI) CAuthUI.hide();
                 var email  = (session.user && session.user.email) || "";
                 var handle = email.split("@")[0] || email;
@@ -1554,6 +1567,7 @@
           } else {
             /* Signed out — reveal shell, clear state, show login overlay, hide admin. */
             _revealShell();
+            _setAdminViewerState(false);
             _clearDashboardState();
             if (window.CAuthUI) CAuthUI.show();
             if (logoutBtn) logoutBtn.setAttribute("hidden", "");
