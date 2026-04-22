@@ -18,6 +18,7 @@ _JWKS_URL: str | None = None
 _JWKS_CLIENT: PyJWKClient | None = None
 _ADMIN_USER_IDS: set[str] = set()
 _ADMIN_IDS_LOADED = False
+_ADMIN_EMAILS: set[str] | None = None
 
 
 class AuthError(Exception):
@@ -64,6 +65,14 @@ def _get_admin_ids() -> set[str]:
         _ADMIN_USER_IDS = {uid.strip() for uid in raw.split(",") if uid.strip()}
         _ADMIN_IDS_LOADED = True
     return _ADMIN_USER_IDS
+
+
+def _get_admin_emails() -> set[str]:
+    global _ADMIN_EMAILS
+    if _ADMIN_EMAILS is None:
+        raw = os.environ.get("ADMIN_USER_EMAILS", "")
+        _ADMIN_EMAILS = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    return _ADMIN_EMAILS
 
 
 _ALLOWED_EMAILS: set[str] | None = None
@@ -141,9 +150,11 @@ def get_user_id(payload: dict[str, Any]) -> str:
     return str(uid)
 
 
-def is_admin(user_id: str) -> bool:
-    """Return True if this user_id is listed in ADMIN_USER_IDS."""
-    return user_id in _get_admin_ids()
+def is_admin(user_id: str, email: str | None = None) -> bool:
+    """Return True if this user is listed in admin ids or admin emails."""
+    if user_id in _get_admin_ids():
+        return True
+    return bool(email and email.strip().lower() in _get_admin_emails())
 
 
 def extract_bearer_token(auth_header: str | None) -> str:
@@ -172,6 +183,6 @@ def require_admin(handler: BaseHTTPRequestHandler) -> tuple[str, dict[str, Any]]
     Raises AuthError with 403-level message if not admin.
     """
     user_id, payload = require_auth(handler)
-    if not is_admin(user_id):
+    if not is_admin(user_id, payload.get("email")):
         raise AuthError("Admin access required")
     return user_id, payload

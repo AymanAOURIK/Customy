@@ -148,6 +148,129 @@
       });
   }
 
+  /* ── Jobs list ────────────────────────────────────────── */
+
+  function currentJobsFilter() {
+    var sel = document.getElementById("admin-jobs-filter");
+    return sel ? sel.value : "";
+  }
+
+  function currentJobsQuery() {
+    var input = document.getElementById("admin-jobs-search");
+    return input ? String(input.value || "").trim() : "";
+  }
+
+  function loadJobs() {
+    var tbody = document.getElementById("admin-jobs-body");
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="aq-empty-row">Loading&hellip;</td></tr>';
+
+    var params = new URLSearchParams();
+    var status = currentJobsFilter();
+    var query = currentJobsQuery();
+    if (status) params.set("status", status);
+    if (query) params.set("q", query);
+    params.set("limit", "100");
+
+    authFetch("/api/admin/jobs" + (params.toString() ? "?" + params.toString() : ""))
+      .then(function (data) {
+        if (data.error) throw new Error(data.error);
+        var jobs = data.jobs || [];
+        if (!jobs.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="aq-empty-row">No jobs found.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = jobs.map(function (job) {
+          return (
+            "<tr>" +
+            "<td>" + fmtDate(job.created_at) + "</td>" +
+            "<td>" + escHtml(fmt(job.user_email)) + "</td>" +
+            "<td>" + escHtml(fmt(job.company)) + "</td>" +
+            "<td>" + escHtml(fmt(job.title)) + "</td>" +
+            "<td>" + escHtml(fmt(job.status)) + "</td>" +
+            "<td>" + escHtml(fmt(job.source)) + "</td>" +
+            '<td class="admin-idea-actions">' +
+              '<button class="aq-btn admin-job-status-btn" data-job-id="' + job.id + '" data-job-status="' + escHtml(fmt(job.status, "")) + '">Status</button>' +
+              '<button class="aq-btn admin-job-notes-btn" data-job-id="' + job.id + '">Notes</button>' +
+              '<button class="aq-btn admin-job-delete-btn" data-job-id="' + job.id + '">Delete</button>' +
+            "</td>" +
+            "</tr>"
+          );
+        }).join("");
+
+        tbody.querySelectorAll(".admin-job-status-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            updateJobStatus(Number(btn.dataset.jobId), btn.dataset.jobStatus || "");
+          });
+        });
+        tbody.querySelectorAll(".admin-job-notes-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            updateJobNotes(Number(btn.dataset.jobId));
+          });
+        });
+        tbody.querySelectorAll(".admin-job-delete-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            deleteJob(Number(btn.dataset.jobId));
+          });
+        });
+      })
+      .catch(function (err) {
+        tbody.innerHTML =
+          '<tr><td colspan="7" class="aq-empty-row">Failed to load jobs: ' + escHtml(err.message) + "</td></tr>";
+      });
+  }
+
+  function patchJob(jobId, payload) {
+    var fn = window.CAuth ? CAuth.authFetch.bind(CAuth) : window.fetch.bind(window);
+    return fn("/api/admin/jobs/" + jobId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    }).then(function (r) { return r.json(); });
+  }
+
+  function updateJobStatus(jobId, currentStatus) {
+    var nextStatus = window.prompt("New status", currentStatus || "");
+    if (nextStatus === null) return;
+    nextStatus = nextStatus.trim();
+    if (!nextStatus) return;
+    patchJob(jobId, { status: nextStatus })
+      .then(function (data) {
+        if (data.error) throw new Error(data.error);
+        loadJobs();
+      })
+      .catch(function (err) {
+        alert("Status update failed: " + err.message);
+      });
+  }
+
+  function updateJobNotes(jobId) {
+    var nextNotes = window.prompt("Notes");
+    if (nextNotes === null) return;
+    patchJob(jobId, { notes: nextNotes })
+      .then(function (data) {
+        if (data.error) throw new Error(data.error);
+        loadJobs();
+      })
+      .catch(function (err) {
+        alert("Notes update failed: " + err.message);
+      });
+  }
+
+  function deleteJob(jobId) {
+    if (!window.confirm("Delete this job?")) return;
+    var fn = window.CAuth ? CAuth.authFetch.bind(CAuth) : window.fetch.bind(window);
+    fn("/api/admin/jobs/" + jobId, { method: "DELETE" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) throw new Error(data.error);
+        loadJobs();
+      })
+      .catch(function (err) {
+        alert("Delete failed: " + err.message);
+      });
+  }
+
   /* ── User detail panel ────────────────────────────────── */
 
   function loadUserDetail(userId) {
@@ -422,6 +545,26 @@
     if (saveBtn) {
       saveBtn.addEventListener("click", saveIdea);
     }
+
+    var jobsFilter = document.getElementById("admin-jobs-filter");
+    if (jobsFilter) {
+      jobsFilter.addEventListener("change", loadJobs);
+    }
+
+    var jobsSearchBtn = document.getElementById("admin-jobs-search-btn");
+    if (jobsSearchBtn) {
+      jobsSearchBtn.addEventListener("click", loadJobs);
+    }
+
+    var jobsSearch = document.getElementById("admin-jobs-search");
+    if (jobsSearch) {
+      jobsSearch.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loadJobs();
+        }
+      });
+    }
   }
 
   /* ── Public API ───────────────────────────────────────── */
@@ -437,6 +580,7 @@
   function refresh() {
     loadStats();
     loadUsers();
+    loadJobs();
     loadIdeas(currentIdeasFilter());
   }
 

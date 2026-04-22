@@ -64,6 +64,7 @@ from app.routes_local import dispatch_local_get, dispatch_local_patch, dispatch_
 from app.routes_admin import (
     dispatch_admin_delete,
     dispatch_admin_get,
+    dispatch_admin_patch,
     dispatch_admin_post,
     dispatch_admin_put,
 )
@@ -780,6 +781,9 @@ def run_server(host: str, port: int, cfg: dict) -> None:
                 return
             if cfg["mode"] == "saas" and dispatch_jobs_patch(self, parsed.path, cfg):
                 return
+            if cfg["mode"] == "saas" and parsed.path.startswith("/api/admin/"):
+                if dispatch_admin_patch(self, parsed.path, cfg):
+                    return
             _notes_match = re.fullmatch(r"/api/applications/(\d+)/notes", parsed.path)
             if _notes_match:
                 try:
@@ -891,7 +895,7 @@ def run_server(host: str, port: int, cfg: dict) -> None:
             origin = cfg.get("cors_origin", "*")
             self.send_response(HTTPStatus.NO_CONTENT)
             self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Access-Control-Max-Age", "86400")
             self.end_headers()

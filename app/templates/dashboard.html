@@ -1124,6 +1124,49 @@
               </div>
             </div>
 
+            <!-- Jobs Management -->
+            <div class="shell-card">
+              <div class="shell-card-header">
+                <div>
+                  <h3 class="shell-card-title">Jobs</h3>
+                  <p class="shell-card-subtitle">Cross-user job tracker and cleanup</p>
+                </div>
+                <div class="page-header-actions">
+                  <select id="admin-jobs-filter" class="aq-select">
+                    <option value="">All statuses</option>
+                    <option value="saved">Saved</option>
+                    <option value="generated">Generated</option>
+                    <option value="applied">Applied</option>
+                    <option value="interviewing">Interviewing</option>
+                    <option value="offer">Offer</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="ghosted">Ghosted</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                  <input id="admin-jobs-search" type="search" class="pe-input" placeholder="Search job, company, or user email" style="min-width:280px" />
+                  <button class="btn-secondary" id="admin-jobs-search-btn">Search</button>
+                </div>
+              </div>
+              <div class="shell-table-wrap">
+                <table class="shell-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>User</th>
+                      <th>Company</th>
+                      <th>Title</th>
+                      <th>Status</th>
+                      <th>Source</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-jobs-body">
+                    <tr><td colspan="7" class="aq-empty-row">Waiting for data&hellip;</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <!-- Ideas Board -->
             <div class="shell-card">
               <div class="shell-card-header">

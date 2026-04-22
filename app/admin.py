@@ -133,6 +133,90 @@ def get_platform_stats() -> dict[str, Any]:
     }
 
 
+def list_jobs(
+    *,
+    status: str | None = None,
+    user_id: str | None = None,
+    query: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            j.*,
+            u.email AS user_email
+        FROM jobs j
+        JOIN auth.users u ON u.id = j.user_id
+        WHERE 1 = 1
+    """
+    params: list[Any] = []
+    if status:
+        sql += " AND j.status = %s"
+        params.append(status)
+    if user_id:
+        sql += " AND j.user_id = %s"
+        params.append(user_id)
+    if query:
+        like = f"%{query.strip()}%"
+        sql += " AND (COALESCE(j.title, '') ILIKE %s OR COALESCE(j.company, '') ILIKE %s OR COALESCE(u.email, '') ILIKE %s)"
+        params.extend([like, like, like])
+    sql += " ORDER BY j.created_at DESC, j.id DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+
+    with _connect(service_role=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return _rows(cur)
+
+
+def update_job(job_id: int, data: dict[str, Any]) -> dict[str, Any]:
+    allowed = {"status", "notes", "application_id"}
+    set_clauses = []
+    values = []
+    for field in allowed:
+        if field not in data:
+            continue
+        set_clauses.append(f"{field} = %s")
+        value = data[field]
+        if field == "notes" and isinstance(value, str):
+            value = value.strip() or None
+        values.append(value)
+    if not set_clauses:
+        return get_job(job_id) or {}
+    values.append(job_id)
+    with _connect(service_role=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE jobs SET {', '.join(set_clauses)} WHERE id = %s RETURNING *",
+                values,
+            )
+            job = _row(cur) or {}
+    return job
+
+
+def get_job(job_id: int) -> dict[str, Any] | None:
+    with _connect(service_role=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    j.*,
+                    u.email AS user_email
+                FROM jobs j
+                JOIN auth.users u ON u.id = j.user_id
+                WHERE j.id = %s
+                """,
+                (job_id,),
+            )
+            return _row(cur)
+
+
+def delete_job(job_id: int) -> None:
+    with _connect(service_role=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM jobs WHERE id = %s", (job_id,))
+
+
 # ---------------------------------------------------------------------------
 # Ideas board
 # ---------------------------------------------------------------------------

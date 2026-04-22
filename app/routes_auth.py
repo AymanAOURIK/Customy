@@ -54,6 +54,6 @@ def handle_auth_me(handler: BaseHTTPRequestHandler, cfg: dict) -> None:
         {
             "user_id": user_id,
             "email": email,
-            "is_admin": is_admin(user_id),
+            "is_admin": is_admin(user_id, email),
         },
     )
