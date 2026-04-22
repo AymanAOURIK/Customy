@@ -285,14 +285,15 @@ def get_funnel_stats(user_id: str) -> dict[str, int]:
             cur.execute(
                 """
                 SELECT status, COUNT(*) AS count
-                FROM applications
-                WHERE user_id = %s AND COALESCE(is_duplicate, 0) = 0
+                FROM jobs
+                WHERE user_id = %s
                 GROUP BY status
                 """,
                 (user_id,),
             )
             for row in _rows(cur):
-                stats[row["status"]] = int(row["count"])
+                if row["status"] in stats:
+                    stats[row["status"]] = int(row["count"])
     return stats
 
 
@@ -333,7 +334,7 @@ def get_daily_stats(user_id: str, days: int = 30) -> list[dict[str, Any]]:
 
 
 def refresh_daily_stats(user_id: str) -> None:
-    """Recompute daily_stats for this user from the applications table."""
+    """Recompute daily_stats for this user from the jobs table."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM daily_stats WHERE user_id = %s", (user_id,))
@@ -343,13 +344,13 @@ def refresh_daily_stats(user_id: str) -> None:
                 SELECT
                     user_id,
                     created_at::date AS date,
-                    COUNT(*) AS generated,
-                    SUM(CASE WHEN status = 'applied' THEN 1 ELSE 0 END) AS applied,
-                    SUM(CASE WHEN status = 'interviewing' THEN 1 ELSE 0 END) AS interviews,
-                    SUM(CASE WHEN status = 'offer' THEN 1 ELSE 0 END) AS offers,
-                    SUM(CASE WHEN status IN ('rejected', 'ghosted') THEN 1 ELSE 0 END) AS rejections
-                FROM applications
-                WHERE user_id = %s AND COALESCE(is_duplicate, 0) = 0
+                    COUNT(*) FILTER (WHERE status NOT IN ('saved', 'archived')) AS generated,
+                    COUNT(*) FILTER (WHERE status = 'applied') AS applied,
+                    COUNT(*) FILTER (WHERE status = 'interviewing') AS interviews,
+                    COUNT(*) FILTER (WHERE status = 'offer') AS offers,
+                    COUNT(*) FILTER (WHERE status IN ('rejected', 'ghosted')) AS rejections
+                FROM jobs
+                WHERE user_id = %s
                 GROUP BY user_id, created_at::date
                 ON CONFLICT (user_id, date) DO UPDATE SET
                     generated  = EXCLUDED.generated,
@@ -370,11 +371,9 @@ def get_quick_stats(user_id: str) -> dict[str, Any]:
                 SELECT
                     COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '6 days') AS week_count,
                     COUNT(*) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())) AS month_count,
-                    AVG(COALESCE(initial_score, score)) AS avg_initial_score,
-                    AVG(updated_score) AS avg_updated_score,
-                    AVG(COALESCE(updated_score, initial_score, score)) AS avg_score
-                FROM applications
-                WHERE user_id = %s AND COALESCE(is_duplicate, 0) = 0
+                    AVG(relevance_score) AS avg_score
+                FROM jobs
+                WHERE user_id = %s
                 """,
                 (user_id,),
             )
@@ -382,9 +381,9 @@ def get_quick_stats(user_id: str) -> dict[str, Any]:
 
             cur.execute(
                 """
-                SELECT role, COUNT(*) AS count FROM applications
-                WHERE user_id = %s AND role != '' AND COALESCE(is_duplicate, 0) = 0
-                GROUP BY role ORDER BY count DESC, role ASC LIMIT 1
+                SELECT title AS role, COUNT(*) AS count FROM jobs
+                WHERE user_id = %s AND title != ''
+                GROUP BY title ORDER BY count DESC, title ASC LIMIT 1
                 """,
                 (user_id,),
             )
@@ -414,8 +413,8 @@ def get_quick_stats(user_id: str) -> dict[str, Any]:
     return {
         "applications_this_week": int(stats_row.get("week_count") or 0),
         "applications_this_month": int(stats_row.get("month_count") or 0),
-        "average_initial_score": _f(stats_row.get("avg_initial_score")),
-        "average_updated_score": _f(stats_row.get("avg_updated_score")),
+        "average_initial_score": _f(stats_row.get("avg_score")),
+        "average_updated_score": None,
         "average_score": _f(stats_row.get("avg_score")),
         "most_targeted_role": role_row["role"] if role_row else "",
         "openai_request_count": int(usage_row.get("request_count") or 0),
